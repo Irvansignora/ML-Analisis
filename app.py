@@ -45,32 +45,30 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 footer { visibility: hidden !important; }
 [data-testid="stDecoration"] { display: none !important; }
 
-/* Header tetap ada agar tombol sidebar toggle tidak hilang */
+/* Header transparan - JANGAN dihide agar sidebar toggle tetap ada */
 header[data-testid="stHeader"] {
-    background: rgba(2,11,24,0.92) !important;
+    background: rgba(2,11,24,0.95) !important;
     backdrop-filter: blur(12px) !important;
-    border-bottom: 1px solid rgba(6,182,212,0.12) !important;
+    border-bottom: 1px solid rgba(6,182,212,0.1) !important;
 }
-/* Sembunyikan toolbar kanan tapi biarkan tombol sidebar */
-[data-testid="stToolbar"] { display: none !important; }
-[data-testid="stStatusWidget"] { display: none !important; }
-/* Tombol collapse sidebar - pastikan visible */
-[data-testid="stSidebarCollapsedControl"],
-[data-testid="collapsedControl"] {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    pointer-events: all !important;
-    z-index: 9999 !important;
+/* Sembunyikan deploy toolbar tapi bukan sidebar button */
+[data-testid="stToolbar"] { visibility: hidden !important; }
+
+/* Sidebar toggle button styling */
+[data-testid="stSidebarCollapsedControl"] {
+    display: flex !important; visibility: visible !important;
+    opacity: 1 !important; pointer-events: all !important;
+    z-index: 99999 !important; top: 0.5rem !important; left: 0.5rem !important;
 }
-[data-testid="stSidebarCollapsedControl"] button,
-[data-testid="collapsedControl"] button {
-    background: rgba(6,182,212,0.15) !important;
-    border: 1px solid rgba(6,182,212,0.4) !important;
+[data-testid="stSidebarCollapsedControl"] button {
+    background: rgba(6,182,212,0.2) !important;
+    border: 1px solid rgba(6,182,212,0.5) !important;
     border-radius: 8px !important;
-    color: #7dd3fc !important;
+    color: #7dd3fc !important; width: 2rem !important; height: 2rem !important;
 }
-.main .block-container { padding-top: 4.5rem !important; padding-bottom: 1rem !important; max-width: 100% !important; }
+[data-testid="stSidebarCollapsedControl"] svg { fill: #7dd3fc !important; color: #7dd3fc !important; }
+
+.main .block-container { padding-top: 4rem !important; padding-bottom: 1rem !important; max-width: 100% !important; }
 
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, rgba(2,11,24,0.97) 0%, rgba(3,20,46,0.98) 100%) !important;
@@ -178,13 +176,10 @@ header[data-testid="stHeader"] {
     background: rgba(2,11,24,0.7); backdrop-filter: blur(12px);
     border-radius: 12px; padding: 4px; gap: 3px;
     border: 1px solid rgba(6,182,212,0.15);
-    width: 100% !important;
-    flex-wrap: nowrap !important;
 }
 .stTabs [data-baseweb="tab"] {
     border-radius: 8px !important; color: #7dd3fc !important;
     font-weight: 500 !important; padding: 7px 16px !important; border: none !important;
-    flex: 1 !important; text-align: center !important;
 }
 .stTabs [aria-selected="true"] {
     background: linear-gradient(135deg, #0369a1, #0ea5e9) !important;
@@ -200,9 +195,7 @@ header[data-testid="stHeader"] {
 [data-testid="stFileUploaderDropzone"] button {
     background: rgba(6,182,212,0.15) !important;
     border: 1px solid rgba(6,182,212,0.5) !important;
-    border-radius: 8px !important;
-    color: #ffffff !important;
-    font-weight: 600 !important;
+    border-radius: 8px !important; color: #ffffff !important; font-weight: 600 !important;
 }
 
 [data-testid="metric-container"] {
@@ -346,7 +339,7 @@ def render_sidebar():
             if 'date' in df.columns:
                 dmin, dmax = df['date'].min().date(), df['date'].max().date()
                 st.markdown(f'<div class="stat-badge">📅 {dmin} → {dmax}</div>', unsafe_allow_html=True)
-            # Filter info badge jika aktif
+
             if st.session_state.df_filtered is not None:
                 n = len(st.session_state.df_filtered)
                 st.markdown(f'<div class="stat-badge" style="border-color:rgba(245,158,11,0.4);color:#fbbf24">🔍 Filtered: {n:,}</div>', unsafe_allow_html=True)
@@ -1075,19 +1068,22 @@ def tab_reports():
 def main():
     render_sidebar()
 
-    # CSS tambahan untuk selectbox putih & tabs full width
     st.markdown("""
     <style>
+    /* Tabs full width */
+    .stTabs [data-baseweb="tab-list"] { width: 100% !important; }
+    .stTabs [data-baseweb="tab"] { flex: 1 !important; text-align: center !important; }
     /* Selectbox teks putih */
     [data-testid="stSelectbox"] > div > div > div { color: #ffffff !important; font-weight: 600 !important; }
     [data-testid="stSelectbox"] svg { fill: #7dd3fc !important; }
-    /* Filter expander */
-    [data-testid="stExpander"] {
-        background: rgba(6,182,212,0.05) !important;
-        border: 1px solid rgba(6,182,212,0.2) !important;
+    /* Filter expander kecil rapi */
+    div[data-testid="stExpander"] > details {
+        background: rgba(6,182,212,0.06) !important;
+        border: 1px solid rgba(6,182,212,0.25) !important;
         border-radius: 10px !important;
+        padding: 2px 8px !important;
     }
-    [data-testid="stExpander"] summary p { color: #7dd3fc !important; font-weight: 500 !important; }
+    div[data-testid="stExpander"] summary { color: #7dd3fc !important; font-size: 0.85rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1099,12 +1095,11 @@ def main():
         "📑 Reports"
     ])
 
-    # ── TAB 0: DASHBOARD ──
     with tabs[0]:
         df_raw = st.session_state.df
 
-        # Baris nav + filter sejajar
-        nav_col, filt_col = st.columns([4, 1])
+        # Baris 1: Dropdown navigasi (full width) + Filter tombol (kanan kecil)
+        nav_col, filt_col = st.columns([5, 1])
 
         with nav_col:
             dashboard_view = st.selectbox(
@@ -1152,7 +1147,7 @@ def main():
                             st.session_state.analyzer    = SalesAnalyzer(df_raw)
                             st.rerun()
 
-        st.markdown('<hr style="border:none;border-top:1px solid rgba(6,182,212,0.15);margin:6px 0 14px 0">', unsafe_allow_html=True)
+        st.markdown('<hr style="border:none;border-top:1px solid rgba(6,182,212,0.15);margin:4px 0 12px 0">', unsafe_allow_html=True)
 
         if dashboard_view == "📊 KPI Overview":       tab_kpi()
         elif dashboard_view == "📈 Sales Performance": tab_sales()
