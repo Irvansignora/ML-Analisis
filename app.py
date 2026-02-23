@@ -64,8 +64,16 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     border-right: 1px solid rgba(6,182,212,0.2) !important;
     backdrop-filter: blur(20px);
 }
-[data-testid="stSidebar"] * { color: #e0f2fe !important; }
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] div { color: #e0f2fe !important; }
 [data-testid="stSidebar"] .stMarkdown p { color: #94a3b8 !important; }
+[data-testid="stSidebar"] small { color: #64748b !important; }
+/* Sidebar title labels biar keliatan */
+[data-testid="stSidebar"] h5,
+[data-testid="stSidebar"] h4,
+[data-testid="stSidebar"] h3 { color: #bae6fd !important; font-weight: 600 !important; }
 
 /* ── Hero Header ── */
 .hero-header {
@@ -283,14 +291,26 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 }
 
 /* ── File Uploader ── */
-[data-testid="stFileUploader"] {
-    background: rgba(6,182,212,0.05) !important;
-    border: 2px dashed rgba(6,182,212,0.3) !important;
-    border-radius: 14px !important;
-    padding: 8px !important;
+[data-testid="stFileUploaderDropzone"] {
+    background: rgba(6,182,212,0.06) !important;
+    border: 1.5px dashed rgba(6,182,212,0.35) !important;
+    border-radius: 12px !important;
 }
-[data-testid="stFileUploader"] * { color: #7dd3fc !important; }
-[data-testid="stFileUploader"] small { color: #475569 !important; }
+[data-testid="stFileUploaderDropzoneInstructions"] div span {
+    color: #7dd3fc !important;
+    font-size: 0.9rem !important;
+    font-weight: 500 !important;
+}
+[data-testid="stFileUploaderDropzoneInstructions"] div small {
+    color: #64748b !important;
+    font-size: 0.78rem !important;
+}
+[data-testid="stFileUploader"] button {
+    background: rgba(6,182,212,0.1) !important;
+    border: 1px solid rgba(6,182,212,0.3) !important;
+    color: #7dd3fc !important;
+    border-radius: 8px !important;
+}
 
 /* ── Metrics ── */
 [data-testid="metric-container"] {
@@ -490,7 +510,7 @@ def render_sidebar():
         st.markdown("""
         <div style="color:#475569;font-size:0.75rem;text-align:center;padding:10px 0">
             SalesML v2.0 · Built with Streamlit<br>
-            <span style="color:#6366f1">Powered by Irvan_Signora</span>
+            <span style="color:#6366f1">Powered by Irvan_signora</span>
         </div>""", unsafe_allow_html=True)
 
 # ── OVERVIEW TAB ─────────────────────────────────────────────────────────────
