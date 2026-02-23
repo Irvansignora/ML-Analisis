@@ -167,8 +167,14 @@ class SalesForecaster:
         )
         
         # Scale features
-        X_train_scaled = self.scaler.fit_transform(X_train)
-        X_test_scaled = self.scaler.transform(X_test)
+        X_train_scaled_arr = self.scaler.fit_transform(X_train)
+        X_test_scaled_arr  = self.scaler.transform(X_test)
+        
+        # BUG FIX: LightGBM & XGBoost ditraining dengan feature names (DataFrame),
+        # tapi scaler.transform() mengembalikan numpy array -> menyebabkan warning.
+        # Solusi: bungkus kembali ke DataFrame dengan nama kolom yang sama.
+        X_train_scaled = pd.DataFrame(X_train_scaled_arr, columns=X_train.columns, index=X_train.index)
+        X_test_scaled  = pd.DataFrame(X_test_scaled_arr,  columns=X_test.columns,  index=X_test.index)
         
         # Initialize model
         if self.model_type == 'linear':
@@ -407,7 +413,9 @@ class SalesForecaster:
         X = df_pred[self.feature_columns].fillna(0)
         # Pastikan semua kolom numerik
         X = X.apply(pd.to_numeric, errors='coerce').fillna(0)
-        X_scaled = self.scaler.transform(X)
+        X_scaled_arr = self.scaler.transform(X)
+        # BUG FIX: wrap kembali ke DataFrame agar LightGBM/XGBoost tidak warning feature names
+        X_scaled = pd.DataFrame(X_scaled_arr, columns=self.feature_columns, index=X.index)
         
         return self.model.predict(X_scaled)
     
