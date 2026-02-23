@@ -44,8 +44,9 @@ class DataPreprocessor:
                   'harga_per_unit', 'harga_item', 'unit_cost', 'selling_price',
                   'harga_pokok', 'hpp', 'cost', 'rate', 'tarif'],
         # Revenue/Sales columns
-        'revenue': ['revenue', 'total', 'total_price', 'total_amount', 'penjualan', 'total_harga',
-                    'sales', 'omset', 'total_revenue', 'subtotal', 'sub_total', 'grand_total',
+        'revenue': ['grand_total', 'revenue', 'total_price', 'total_amount', 'penjualan',
+                    'total_harga', 'sales', 'omset', 'total_revenue', 'subtotal', 'sub_total',
+                    'total',
                     'total_penjualan', 'total_bayar', 'total_pembayaran', 'nilai_penjualan',
                     'nilai', 'nominal', 'jumlah_total', 'total_transaksi', 'pendapatan',
                     'income', 'gross_sales', 'net_sales', 'total_sales', 'sale_amount',
@@ -53,7 +54,17 @@ class DataPreprocessor:
         # Category columns
         'category': ['category', 'kategori', 'product_category', 'kategori_produk', 'type',
                      'jenis', 'tipe', 'divisi', 'division', 'group', 'grup', 'kelompok',
-                     'product_group', 'product_type', 'jenis_produk', 'kelas'],
+                     'product_group', 'product_type', 'jenis_produk', 'kelas', 'channel'],
+        # Order/Invoice columns (e-commerce)
+        'order_id': ['no_pesanan', 'no_order', 'order_id', 'id_order', 'no_invoice',
+                     'invoice', 'no_faktur', 'faktur', 'ref', 'kode_transaksi'],
+        'channel': ['channel', 'marketplace', 'platform', 'saluran', 'sumber'],
+        'store': ['nama_toko', 'toko', 'store', 'nama_store', 'outlet', 'cabang'],
+        'courier': ['kurir', 'courier', 'ekspedisi', 'pengiriman', 'jasa_kirim'],
+        'status': ['status', 'status_order', 'status_transaksi', 'kondisi'],
+        'discount': ['diskon', 'discount', 'potongan', 'promo'],
+        'shipping': ['ongkir', 'shipping', 'ongkos_kirim', 'biaya_kirim', 'freight'],
+        'tax': ['pajak', 'tax', 'ppn', 'vat'],
         # Customer columns
         'customer': ['customer', 'customer_id', 'pelanggan', 'customer_name', 'nama_pelanggan',
                      'buyer', 'pembeli', 'nama_pembeli', 'client', 'klien', 'konsumen',
@@ -155,15 +166,47 @@ class DataPreprocessor:
                     self.mapped_columns[standard_name] = col
                     break
                 # Partial/substring match as fallback
-                for var in variations_lower:
-                    if var in col_clean or col_clean in var:
-                        if col not in new_columns:  # dont overwrite exact match
-                            new_columns[col] = standard_name
-                            self.mapped_columns[standard_name] = col
-                        break
+                # Skip kolom yg jelas numerik (%, no_, id_, kode_) untuk product/category
+                skip_for_text = standard_name in ['product', 'category'] and any(
+                    x in col_clean for x in ['%', 'no_', 'id_', 'kode_', 'jumlah', 'harga',
+                                             'total', 'diskon', 'biaya', 'pajak', 'ongkir',
+                                             'asuransi', 'potongan', 'qty', 'amount'])
+                if not skip_for_text:
+                    for var in variations_lower:
+                        if var in col_clean or col_clean in var:
+                            if col not in new_columns:  # dont overwrite exact match
+                                new_columns[col] = standard_name
+                                self.mapped_columns[standard_name] = col
+                            break
         
         df = df.rename(columns=new_columns)
         logger.info(f"Columns standardized: {new_columns}")
+        
+        # Fallback: kalau tidak ada kolom 'product', gunakan kolom lain sebagai proxy
+        if 'product' not in df.columns:
+            for fallback in ['channel', 'store', 'category', 'status', 'courier']:
+                if fallback in df.columns:
+                    # pastikan kolom ini berisi string/kategori, bukan angka
+                    col_dtype = df[fallback].dtype
+                    if col_dtype == object or str(col_dtype) == 'string':
+                        df['product'] = df[fallback].astype(str)
+                        logger.info(f"Kolom 'product' tidak ditemukan, menggunakan '{fallback}' sebagai proxy")
+                        break
+            else:
+                df['product'] = 'Unknown'
+                logger.warning("Kolom 'product' tidak ditemukan, diisi dengan 'Unknown'")
+        
+        # Fallback: kalau tidak ada kolom 'category', gunakan channel/store
+        if 'category' not in df.columns:
+            for fallback in ['channel', 'store', 'courier', 'status']:
+                if fallback in df.columns:
+                    df['category'] = df[fallback].astype(str)
+                    logger.info(f"Kolom 'category' tidak ditemukan, menggunakan '{fallback}' sebagai proxy")
+                    break
+            else:
+                df['category'] = 'General'
+                logger.warning("Kolom 'category' tidak ditemukan, diisi dengan 'General'")
+        
         return df
     
     def parse_date_column(self, df: pd.DataFrame, date_column: str = 'date') -> pd.DataFrame:
