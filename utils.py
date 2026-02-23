@@ -113,10 +113,18 @@ class SalesAnalyzer:
             logger.warning("Date atau revenue column tidak ditemukan")
             return pd.DataFrame()
         
-        # BUG FIX: quantity mungkin tidak ada di semua dataset
-        agg_dict = {'revenue': 'sum'}
+        # BUG FIX: pastikan semua kolom yang akan di-agg benar-benar ada dan numerik
+        agg_dict = {}
+        if 'revenue' in self.df.columns:
+            self.df['revenue'] = pd.to_numeric(self.df['revenue'], errors='coerce').fillna(0)
+            agg_dict['revenue'] = 'sum'
         if 'quantity' in self.df.columns:
+            self.df['quantity'] = pd.to_numeric(self.df['quantity'], errors='coerce').fillna(0)
             agg_dict['quantity'] = 'sum'
+        
+        if not agg_dict:
+            logger.warning("Tidak ada kolom numerik untuk diagregasi")
+            return pd.DataFrame()
         
         # Monthly aggregation
         monthly = self.df.groupby(self.df['date'].dt.to_period('M')).agg(agg_dict).reset_index()
@@ -786,19 +794,42 @@ class Visualizer:
 
 def format_currency(value: float) -> str:
     """
-    Format angka ke format mata uang Rupiah
-    
-    Parameters:
-    -----------
-    value : float
-        Nilai yang akan diformat
-        
-    Returns:
-    --------
-    str
-        String format mata uang
+    Format angka ke format mata uang Rupiah dengan K/M/B suffix biar ringkas
     """
-    return f"Rp {value:,.0f}"
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return "Rp 0"
+    
+    if abs(value) >= 1_000_000_000_000:
+        return f"Rp {value/1_000_000_000_000:.1f}T"
+    elif abs(value) >= 1_000_000_000:
+        return f"Rp {value/1_000_000_000:.1f}B"
+    elif abs(value) >= 1_000_000:
+        return f"Rp {value/1_000_000:.1f}M"
+    elif abs(value) >= 1_000:
+        return f"Rp {value/1_000:.1f}K"
+    else:
+        return f"Rp {value:,.0f}"
+
+
+def format_number(value: float) -> str:
+    """Format angka biasa dengan K/M/B/T suffix"""
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return "0"
+    
+    if abs(value) >= 1_000_000_000_000:
+        return f"{value/1_000_000_000_000:.1f}T"
+    elif abs(value) >= 1_000_000_000:
+        return f"{value/1_000_000_000:.1f}B"
+    elif abs(value) >= 1_000_000:
+        return f"{value/1_000_000:.1f}M"
+    elif abs(value) >= 1_000:
+        return f"{value/1_000:.1f}K"
+    else:
+        return f"{value:,.0f}"
 
 
 def create_sample_data(n_records: int = 1000, output_path: str = 'data/sample_sales.csv'):
