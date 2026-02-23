@@ -233,13 +233,19 @@ class SalesAnalyzer:
             logger.warning("Category column tidak ditemukan")
             return pd.DataFrame()
         
-        category_stats = self.df.groupby('category').agg({
-            'revenue': ['sum', 'mean', 'count'],
-            'quantity': ['sum', 'mean']
-        }).reset_index()
+        agg_dict = {'revenue': ['sum', 'mean', 'count']}
+        if 'quantity' in self.df.columns:
+            agg_dict['quantity'] = ['sum', 'mean']
         
-        category_stats.columns = ['category', 'total_revenue', 'avg_revenue', 'transactions',
-                                 'total_quantity', 'avg_quantity']
+        category_stats = self.df.groupby('category').agg(agg_dict).reset_index()
+        
+        if 'quantity' in self.df.columns:
+            category_stats.columns = ['category', 'total_revenue', 'avg_revenue', 'transactions',
+                                     'total_quantity', 'avg_quantity']
+        else:
+            category_stats.columns = ['category', 'total_revenue', 'avg_revenue', 'transactions']
+            category_stats['total_quantity'] = 0
+            category_stats['avg_quantity'] = 0
         
         # Calculate percentage
         category_stats['revenue_pct'] = (category_stats['total_revenue'] / 
@@ -261,10 +267,10 @@ class SalesAnalyzer:
         
         self.df['day_of_week'] = self.df['date'].dt.day_name()
         
-        weekly = self.df.groupby('day_of_week').agg({
-            'revenue': ['sum', 'mean'],
-            'quantity': ['sum', 'mean']
-        }).reset_index()
+        agg_dict2 = {'revenue': ['sum', 'mean']}
+        if 'quantity' in self.df.columns:
+            agg_dict2['quantity'] = ['sum', 'mean']
+        weekly = self.df.groupby('day_of_week').agg(agg_dict2).reset_index()
         
         # Order by day of week
         day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
