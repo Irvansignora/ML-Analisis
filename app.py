@@ -435,7 +435,9 @@ def tab_kpi():
         ct(fig); st.plotly_chart(fig, width='stretch')
 
     section("💡 Key Insights")
-    insights = SalesAnalyzer(df).generate_insights()
+    # BUG FIX: gunakan session_state.analyzer (sudah ada) daripada buat instance baru setiap render
+    analyzer = st.session_state.analyzer if st.session_state.analyzer else SalesAnalyzer(df)
+    insights = analyzer.generate_insights()
     cols = st.columns(2)
     for i, ins in enumerate(insights):
         with cols[i % 2]:
@@ -508,7 +510,7 @@ def tab_sales():
             st.markdown('<div class="glass-card"><p class="card-title">📋 Detail Salesperson</p>', unsafe_allow_html=True)
             sp['revenue_fmt'] = sp['revenue'].apply(format_currency)
             st.dataframe(sp[[sales_col,'revenue_fmt','txn']].rename(columns={sales_col:'Salesperson','revenue_fmt':'Revenue','txn':'Transaksi'}),
-                         use_container_width=True, height=280)
+                         height=280)
             st.markdown('</div>', unsafe_allow_html=True)
     else:
         proxy = next((c for c in ['channel','store','courier'] if c in df.columns), None)
@@ -610,7 +612,7 @@ def tab_profit():
         tbl['Transaksi'] = tbl['txn']
         st.dataframe(tbl[['product','Revenue','Profit','Margin %','Transaksi']]
                      .rename(columns={'product':'Produk'}).sort_values('Margin %', ascending=False),
-                     use_container_width=True, height=300)
+                     height=300)
         st.markdown(dl(prod_p, 'profitability.csv', 'Download CSV'), unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -685,7 +687,7 @@ def tab_customer():
         rfm_show['monetary'] = rfm_show['monetary'].apply(format_currency)
         st.dataframe(rfm_show[[cust_col,'segment','recency','frequency','monetary','rfm_score']]
                      .rename(columns={cust_col:'Customer','recency':'Recency (hari)','frequency':'Frequency','monetary':'Monetary','rfm_score':'Score'})
-                     .sort_values('Score', ascending=False), use_container_width=True, height=300)
+                     .sort_values('Score', ascending=False), height=300)
         st.markdown(dl(rfm, 'rfm_analysis.csv', 'Download RFM CSV'), unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -743,7 +745,7 @@ def tab_regional():
     tbl['Revenue'] = tbl['revenue'].apply(format_currency)
     tbl['Share %'] = (tbl['revenue'] / tbl['revenue'].sum() * 100).apply(lambda x: f"{x:.1f}%")
     st.dataframe(tbl[[region_col,'Revenue','txn','Share %']].rename(columns={region_col:'Wilayah','txn':'Transaksi'}),
-                 use_container_width=True, height=280)
+                 height=280)
     st.markdown(dl(reg, 'regional.csv', 'Download CSV'), unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -796,7 +798,7 @@ def tab_category():
         slow['share'] = slow['revenue'] / prod['revenue'].sum() * 100
         slow['Revenue'] = slow['revenue'].apply(format_currency)
         slow['Share %'] = slow['share'].apply(lambda x: f"{x:.2f}%")
-        st.dataframe(slow[['product','Revenue','Share %']].rename(columns={'product':'Produk'}), use_container_width=True, height=250)
+        st.dataframe(slow[['product','Revenue','Share %']].rename(columns={'product':'Produk'}), height=250)
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ── TAB 7: ANOMALY ────────────────────────────────────────────────────────────
@@ -840,7 +842,7 @@ def tab_anomaly():
             if not anoms.empty:
                 st.markdown('<div class="glass-card"><p class="card-title">📋 Daftar Anomali</p>', unsafe_allow_html=True)
                 cols = [c for c in ['date','product','revenue','quantity','anomaly_score'] if c in anoms.columns]
-                st.dataframe(anoms[cols].sort_values('anomaly_score', ascending=False), use_container_width=True, height=260)
+                st.dataframe(anoms[cols].sort_values('anomaly_score', ascending=False), height=260)
                 st.markdown(dl(anoms, 'anomalies.csv', 'Download CSV'), unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
         else:
@@ -910,7 +912,7 @@ def tab_models():
     df = get_df()
     if df is None: return empty("⚖️","Belum ada data")
 
-    if st.button("🚀 Bandingkan Semua Model", type="primary"):
+    if st.button("🚀 Bandingkan Semua Model", type="primary", use_container_width=True):
         with st.spinner("Training semua model... (3–5 menit)"):
             try:
                 comp = ModelComparator()
@@ -923,7 +925,7 @@ def tab_models():
     if st.session_state.comparison_df is not None:
         cdf = st.session_state.comparison_df
         st.markdown('<div class="glass-card"><p class="card-title">📊 Hasil Perbandingan</p>', unsafe_allow_html=True)
-        st.dataframe(cdf, use_container_width=True)
+        st.dataframe(cdf)
         st.markdown('</div>', unsafe_allow_html=True)
         if 'test_rmse' in cdf.columns:
             c1, c2 = st.columns(2)
@@ -948,7 +950,8 @@ def tab_reports():
     st.markdown('<div class="hero-header"><p class="hero-title">📑 Reports & Export</p><p class="hero-sub">Download semua hasil analisis</p></div>', unsafe_allow_html=True)
     df = get_df()
     if df is None: return empty("📑","Belum ada data")
-    analyzer = SalesAnalyzer(df)
+    # BUG FIX: reuse session_state.analyzer untuk hindari re-init setiap render
+    analyzer = st.session_state.analyzer if st.session_state.analyzer else SalesAnalyzer(df)
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -961,7 +964,7 @@ def tab_reports():
                     r.generate_pdf_report('reports/sales_report.pdf',
                         st.session_state.forecast_df, st.session_state.segments_df, st.session_state.anomaly_df)
                     with open('reports/sales_report.pdf','rb') as f:
-                        st.download_button("⬇️ Download PDF", f.read(), 'sales_report.pdf', 'application/pdf', use_container_width=True)
+                        st.download_button("⬇️ Download PDF", f.read(), 'sales_report.pdf', 'application/pdf')
                 except Exception as e: st.error(f"❌ {e}")
         st.markdown('</div>', unsafe_allow_html=True)
     with c2:
@@ -975,7 +978,7 @@ def tab_reports():
                         st.session_state.forecast_df, st.session_state.segments_df, st.session_state.anomaly_df)
                     with open('reports/sales_analysis.xlsx','rb') as f:
                         st.download_button("⬇️ Download Excel", f.read(), 'sales_analysis.xlsx',
-                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', use_container_width=True)
+                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
                 except Exception as e: st.error(f"❌ {e}")
         st.markdown('</div>', unsafe_allow_html=True)
     with c3:
@@ -991,13 +994,13 @@ def tab_reports():
                     with zipfile.ZipFile(zp,'w') as zf:
                         for csv in Path('reports').glob('*.csv'): zf.write(csv, csv.name)
                     with open(zp,'rb') as f:
-                        st.download_button("⬇️ Download ZIP", f.read(), 'csv_export.zip', 'application/zip', use_container_width=True)
+                        st.download_button("⬇️ Download ZIP", f.read(), 'csv_export.zip', 'application/zip')
                 except Exception as e: st.error(f"❌ {e}")
         st.markdown('</div>', unsafe_allow_html=True)
 
     section("🔍 Raw Data Preview")
     st.markdown('<div class="glass-card"><p class="card-title">📋 Data (filtered)</p>', unsafe_allow_html=True)
-    st.dataframe(df.head(500), use_container_width=True, height=350)
+    st.dataframe(df.head(500), height=350)
     st.markdown(dl(df, 'data_export.csv', 'Download Full Data CSV'), unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
