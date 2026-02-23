@@ -18,13 +18,11 @@ from preprocessing import DataPreprocessor
 from ml_model import SalesForecaster, ProductSegmenter, AnomalyDetector, ModelComparator
 from utils import SalesAnalyzer, ReportGenerator, format_currency, format_number, create_sample_data
 
-# Sidebar state driven by session state
-_sidebar_state = "expanded" if st.session_state.get("sidebar_open", True) else "collapsed"
 st.set_page_config(
     page_title="Sales ML Analytics",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state=_sidebar_state
+    initial_sidebar_state="expanded"
 )
 
 # ── OCEAN BLUE GLASSMORPHISM CSS ──────────────────────────────────────────────
@@ -55,28 +53,8 @@ header[data-testid="stHeader"] {
     border-bottom: 1px solid rgba(6,182,212,0.1) !important;
 }
 
-/* Tombol collapse/expand sidebar - paksa selalu muncul */
-[data-testid="collapsedControl"],
-button[data-testid="collapsedControl"],
-[data-testid="stSidebarCollapsedControl"] {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    pointer-events: auto !important;
-    z-index: 999999 !important;
-    background: rgba(6,182,212,0.15) !important;
-    border: 1px solid rgba(6,182,212,0.4) !important;
-    border-radius: 8px !important;
-}
-[data-testid="collapsedControl"] svg,
-[data-testid="stSidebarCollapsedControl"] svg {
-    display: block !important;
-    visibility: visible !important;
-    fill: #38bdf8 !important;
-}
-/* Sidebar expand button yang muncul saat sidebar collapse */
-section[data-testid="stSidebarContent"] { display: block !important; }
-div[data-testid="stSidebarUserContent"] { display: block !important; }
+/* Sidebar selalu bisa muncul - jangan hide */
+section[data-testid="stSidebar"] { display: block !important; }
 
 .main .block-container { padding-top: 4rem !important; padding-bottom: 1rem !important; max-width: 100% !important; }
 
@@ -204,6 +182,7 @@ div[data-testid="stSidebarUserContent"] { display: block !important; }
 }
 [data-testid="stFileUploaderDropzoneInstructions"] div span { color: #7dd3fc !important; font-weight: 500 !important; }
 [data-testid="stFileUploaderDropzoneInstructions"] div small { color: #64748b !important; }
+[data-testid="stFileUploaderDropzone"] button { background: rgba(6,182,212,0.15) !important; border: 1px solid rgba(6,182,212,0.5) !important; border-radius: 8px !important; color: #ffffff !important; font-weight: 600 !important; }
 [data-testid="stFileUploaderDropzone"] button {
     background: rgba(6,182,212,0.15) !important;
     border: 1px solid rgba(6,182,212,0.5) !important;
@@ -262,7 +241,6 @@ for k in ['df','preprocessor','analyzer','forecaster','segmenter','detector',
           'forecast_metrics','comparison_df','date_min','date_max',
           'filter_cat','filter_region','df_filtered']:
     if k not in st.session_state: st.session_state[k] = None
-if 'sidebar_open' not in st.session_state: st.session_state.sidebar_open = True
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 def dl(df, filename, text):
@@ -1124,59 +1102,21 @@ def tab_reports():
 def main():
     render_sidebar()
 
-
     st.markdown("""
     <style>
     /* Selectbox dashboard teks putih */
     [data-testid="stSelectbox"] > div > div > div { color: #ffffff !important; font-weight: 600 !important; }
     [data-testid="stSelectbox"] svg { fill: #7dd3fc !important; }
-
-    /* Floating sidebar toggle button - posisi fixed pojok kiri bawah */
-    div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stButton"] > button#sb-toggle) {
-        position: fixed !important;
-        bottom: 1.5rem !important;
-        left: 1rem !important;
-        z-index: 999999 !important;
-        width: auto !important;
-    }
-    button#sb-toggle, button[key="sb_toggle"] {
-        position: fixed !important;
-        bottom: 1.5rem !important;
-        left: 1rem !important;
-        z-index: 999999 !important;
-        width: 2.6rem !important;
-        height: 2.6rem !important;
-        min-width: unset !important;
-        padding: 0 !important;
-        background: rgba(3,20,46,0.9) !important;
-        border: 1.5px solid rgba(6,182,212,0.6) !important;
-        border-radius: 10px !important;
-        font-size: 1.1rem !important;
-        box-shadow: 0 4px 20px rgba(6,182,212,0.3) !important;
-        backdrop-filter: blur(10px) !important;
-        line-height: 1 !important;
-    }
-    button[key="sb_toggle"]:hover {
-        background: rgba(6,182,212,0.25) !important;
-        border-color: #38bdf8 !important;
-        transform: scale(1.08) !important;
-        box-shadow: 0 6px 24px rgba(6,182,212,0.5) !important;
-    }
+    /* Tabs full width */
+    .stTabs [data-baseweb="tab-list"] { width: 100% !important; }
+    .stTabs [data-baseweb="tab"] { flex: 1 !important; justify-content: center !important; }
     </style>
     """, unsafe_allow_html=True)
-
-    # Floating toggle button - native Streamlit button, works reliably
-    icon = "◀" if st.session_state.sidebar_open else "▶"
-    if st.button(icon, key="sb_toggle", help="Toggle Sidebar"):
-        st.session_state.sidebar_open = not st.session_state.sidebar_open
-        st.rerun()
 
     tabs = st.tabs(["📊 Dashboard", "🚨 Anomaly", "🔮 Forecast", "⚖️ Model Comparison", "📑 Reports"])
 
     with tabs[0]:
         df_raw = st.session_state.df
-
-        # Dropdown navigasi sejajar dengan tab Dashboard (lebar pas, tidak full page)
         left, _ = st.columns([2, 3])
         with left:
             dashboard_view = st.selectbox(
@@ -1185,7 +1125,6 @@ def main():
                  "👥 Customer & RFM", "📍 Regional", "🎯 Category & Pareto"],
                 label_visibility="collapsed", key="dashboard_view"
             )
-
         st.markdown('<hr style="border:none;border-top:1px solid rgba(6,182,212,0.15);margin:4px 0 12px 0">', unsafe_allow_html=True)
 
         if   dashboard_view == "📊 KPI Overview":       tab_kpi()
