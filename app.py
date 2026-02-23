@@ -1107,48 +1107,7 @@ def tab_reports():
     st.markdown(dl(df, 'data_export.csv', 'Download Full Data CSV'), unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ── MAIN ─────────────────────────────────────────────────────────────────────
-def main():
-    render_sidebar()
-
-    st.markdown("""
-    <style>
-    [data-testid="stSelectbox"] > div > div > div { color: #ffffff !important; font-weight: 600 !important; }
-    [data-testid="stSelectbox"] svg { fill: #7dd3fc !important; }
-    </style>
-    """, unsafe_allow_html=True)
-
-    tabs = st.tabs(["📊 Dashboard", "🚨 Anomaly", "🔮 Forecast", "⚖️ Model Comparison", "📑 Reports"])
-
-    with tabs[0]:
-        df_raw = st.session_state.df
-
-        # Dropdown hanya selebar tab Dashboard (kolom kiri ~40%)
-        left, _ = st.columns([2, 3])
-        with left:
-            dashboard_view = st.selectbox(
-                "view",
-                ["📊 KPI Overview", "📈 Sales Performance", "💰 Profitability",
-                 "👥 Customer & RFM", "📍 Regional", "🎯 Category & Pareto"],
-                label_visibility="collapsed", key="dashboard_view"
-            )
-
-        st.markdown('<hr style="border:none;border-top:1px solid rgba(6,182,212,0.15);margin:4px 0 12px 0">', unsafe_allow_html=True)
-
-        if   dashboard_view == "📊 KPI Overview":       tab_kpi()
-        elif dashboard_view == "📈 Sales Performance":  tab_sales()
-        elif dashboard_view == "💰 Profitability":      tab_profit()
-        elif dashboard_view == "👥 Customer & RFM":     tab_customer()
-        elif dashboard_view == "📍 Regional":           tab_regional()
-        elif dashboard_view == "🎯 Category & Pareto":  tab_category()
-
-    with tabs[1]: tab_anomaly()
-    with tabs[2]: tab_forecast()
-    with tabs[3]: tab_models()
-    with tabs[4]: tab_reports()
-
-if __name__ == "__main__":
-    main()# ── MAIN ──────────────────────────────────────────────────────────────────────
+# ── MAIN ──────────────────────────────────────────────────────────────────────
 def main():
     render_sidebar()
 
