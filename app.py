@@ -399,12 +399,12 @@ def render_sidebar():
         uploaded = st.file_uploader("CSV / Excel / JSON", type=['csv','xlsx','xls','json'],
                                      accept_multiple_files=True, label_visibility='collapsed')
         if uploaded:
-            if st.button("🚀 Proses Data", type="primary", use_container_width=True):
+            if st.button("🚀 Proses Data", type="primary", width='stretch'):
                 with st.spinner("Memproses..."):
                     process_uploaded_files(uploaded)
 
         st.markdown("")
-        if st.button("📥 Load Sample Data", use_container_width=True):
+        if st.button("📥 Load Sample Data", width='stretch'):
             with st.spinner("Generate sample..."):
                 df = create_sample_data(n_records=1000)
                 st.session_state.df = df
@@ -489,7 +489,7 @@ def render_overview():
             name='Revenue'
         ))
         apply_chart_theme(fig)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         st.markdown('</div>', unsafe_allow_html=True)
 
     with c2:
@@ -507,7 +507,7 @@ def render_overview():
             ))
             fig.update_layout(yaxis=dict(autorange='reversed'))
             apply_chart_theme(fig)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Row 2: Category Pie + Monthly Growth
@@ -528,7 +528,7 @@ def render_overview():
                 legend=dict(font=dict(color='#94a3b8'))
             )
             apply_chart_theme(fig)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         st.markdown('</div>', unsafe_allow_html=True)
 
     with c2:
@@ -545,7 +545,7 @@ def render_overview():
             ))
             fig.add_hline(y=0, line_color='rgba(255,255,255,0.2)', line_dash='dash')
             apply_chart_theme(fig)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Insights
@@ -583,7 +583,7 @@ def render_forecasting():
                                  help="Lebih akurat tapi lebih lama")
         periods = st.slider("Periode Forecast (hari)", 7, 90, 30)
 
-        if st.button("🚀 Train Model", type="primary", use_container_width=True):
+        if st.button("🚀 Train Model", type="primary", width='stretch'):
             with st.spinner(f"Training {model_type}..."):
                 try:
                     fc = SalesForecaster(model_type=model_type)
@@ -627,7 +627,7 @@ def render_forecasting():
                     line=dict(color='#06b6d4', width=2, dash='dash')
                 ))
             apply_chart_theme(fig)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.markdown(get_download_link(fc_df, 'forecast.csv', 'Download Forecast CSV'),
                         unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
@@ -647,7 +647,7 @@ def render_forecasting():
                     ))
                     fig.update_layout(yaxis=dict(autorange='reversed'))
                     apply_chart_theme(fig)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                     st.markdown('</div>', unsafe_allow_html=True)
         else:
             empty_state("🔮", "Belum ada forecast", "Train model untuk melihat hasil prediksi")
@@ -673,7 +673,7 @@ def render_segmentation():
         st.markdown('<p class="section-title">⚙️ Clustering Settings</p>', unsafe_allow_html=True)
         n_clusters = st.slider("Jumlah Cluster", 2, 8, 4)
 
-        if st.button("🚀 Jalankan Clustering", type="primary", use_container_width=True):
+        if st.button("🚀 Jalankan Clustering", type="primary", width='stretch'):
             with st.spinner("Clustering..."):
                 try:
                     seg = ProductSegmenter(n_clusters=n_clusters)
@@ -700,7 +700,7 @@ def render_segmentation():
                     textfont=dict(color='white')
                 ))
                 apply_chart_theme(fig)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
                 st.markdown('</div>', unsafe_allow_html=True)
 
             with c_v2:
@@ -712,13 +712,13 @@ def render_segmentation():
                     marker=dict(color=COLORS[:len(seg_rev)])
                 ))
                 apply_chart_theme(fig)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
                 st.markdown('</div>', unsafe_allow_html=True)
 
             st.markdown('<div class="section-card">', unsafe_allow_html=True)
             st.markdown('<p class="section-title">📋 Detail Segmentasi</p>', unsafe_allow_html=True)
             st.dataframe(seg_df.sort_values('total_revenue', ascending=False),
-                         use_container_width=True, height=300)
+                         width='stretch', height=300)
             st.markdown(get_download_link(seg_df, 'segments.csv', 'Download CSV'),
                         unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
@@ -747,7 +747,7 @@ def render_anomaly():
         method = st.selectbox("Metode", ['isolation_forest', 'zscore'])
         contamination = st.slider("Expected Outlier (%)", 1, 20, 5) / 100
 
-        if st.button("🔍 Deteksi Anomali", type="primary", use_container_width=True):
+        if st.button("🔍 Deteksi Anomali", type="primary", width='stretch'):
             with st.spinner("Mendeteksi..."):
                 try:
                     det = AnomalyDetector(method=method, contamination=contamination)
@@ -785,7 +785,7 @@ def render_anomaly():
                 name='🚨 Anomali', marker=dict(color='#ef4444', size=10, symbol='x', opacity=0.9)
             ))
             apply_chart_theme(fig)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             st.markdown('</div>', unsafe_allow_html=True)
 
             if not anomalies.empty:
@@ -793,7 +793,7 @@ def render_anomaly():
                 st.markdown('<p class="section-title">📋 Daftar Anomali</p>', unsafe_allow_html=True)
                 cols_show = [c for c in ['date','product','revenue','quantity','anomaly_score'] if c in anomalies.columns]
                 st.dataframe(anomalies[cols_show].sort_values('anomaly_score', ascending=False),
-                             use_container_width=True, height=280)
+                             width='stretch', height=280)
                 st.markdown(get_download_link(anomalies, 'anomalies.csv', 'Download Anomalies CSV'),
                             unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -831,7 +831,7 @@ def render_comparison():
 
         st.markdown('<div class="section-card">', unsafe_allow_html=True)
         st.markdown('<p class="section-title">📊 Hasil Perbandingan</p>', unsafe_allow_html=True)
-        st.dataframe(comp_df, use_container_width=True)
+        st.dataframe(comp_df, width='stretch')
         st.markdown('</div>', unsafe_allow_html=True)
 
         if 'test_rmse' in comp_df.columns:
@@ -846,7 +846,7 @@ def render_comparison():
                                 colorscale=[[0,'#10b981'],[0.5,'#f59e0b'],[1,'#ef4444']])
                 ))
                 apply_chart_theme(fig)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
                 st.markdown('</div>', unsafe_allow_html=True)
 
             with c2:
@@ -860,7 +860,7 @@ def render_comparison():
                                     colorscale=[[0,'#ef4444'],[0.5,'#f59e0b'],[1,'#10b981']])
                     ))
                     apply_chart_theme(fig)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                     st.markdown('</div>', unsafe_allow_html=True)
     else:
         empty_state("⚖️", "Belum ada perbandingan", "Klik tombol di atas untuk mulai membandingkan")
@@ -884,7 +884,7 @@ def render_reports():
     with c1:
         st.markdown('<div class="section-card">', unsafe_allow_html=True)
         st.markdown('<p class="section-title">📄 PDF Report</p>', unsafe_allow_html=True)
-        if st.button("Generate PDF", use_container_width=True):
+        if st.button("Generate PDF", width='stretch'):
             with st.spinner("Generating..."):
                 try:
                     Path('reports').mkdir(exist_ok=True)
@@ -898,7 +898,7 @@ def render_reports():
                     with open('reports/sales_report.pdf','rb') as f:
                         st.download_button("⬇️ Download PDF", f.read(),
                                            'sales_report.pdf', 'application/pdf',
-                                           use_container_width=True)
+                                           width='stretch')
                 except Exception as e:
                     st.error(f"❌ {e}")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -906,7 +906,7 @@ def render_reports():
     with c2:
         st.markdown('<div class="section-card">', unsafe_allow_html=True)
         st.markdown('<p class="section-title">📊 Excel Report</p>', unsafe_allow_html=True)
-        if st.button("Generate Excel", use_container_width=True):
+        if st.button("Generate Excel", width='stretch'):
             with st.spinner("Generating..."):
                 try:
                     Path('reports').mkdir(exist_ok=True)
@@ -921,7 +921,7 @@ def render_reports():
                         st.download_button("⬇️ Download Excel", f.read(),
                                            'sales_analysis.xlsx',
                                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                                           use_container_width=True)
+                                           width='stretch')
                 except Exception as e:
                     st.error(f"❌ {e}")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -929,7 +929,7 @@ def render_reports():
     with c3:
         st.markdown('<div class="section-card">', unsafe_allow_html=True)
         st.markdown('<p class="section-title">📁 CSV Export</p>', unsafe_allow_html=True)
-        if st.button("Export CSV", use_container_width=True):
+        if st.button("Export CSV", width='stretch'):
             with st.spinner("Exporting..."):
                 try:
                     import zipfile
@@ -943,7 +943,7 @@ def render_reports():
                     with open(zip_path,'rb') as f:
                         st.download_button("⬇️ Download ZIP", f.read(),
                                            'csv_export.zip', 'application/zip',
-                                           use_container_width=True)
+                                           width='stretch')
                 except Exception as e:
                     st.error(f"❌ {e}")
         st.markdown('</div>', unsafe_allow_html=True)
