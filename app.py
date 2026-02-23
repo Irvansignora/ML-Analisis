@@ -305,11 +305,11 @@ def render_sidebar():
         files = st.file_uploader("CSV / Excel / JSON", type=['csv','xlsx','xls','json'],
                                   accept_multiple_files=True, label_visibility='collapsed')
         if files:
-            if st.button("🚀 Proses Data", type="primary", use_container_width=True):
+            if st.button("🚀 Proses Data", type="primary"):
                 with st.spinner("Memproses..."): process_uploaded_files(files)
 
         st.markdown("")
-        if st.button("📥 Load Sample Data", use_container_width=True):
+        if st.button("📥 Load Sample Data"):
             with st.spinner("Generate sample..."):
                 df = create_sample_data(n_records=1000)
                 st.session_state.df       = df
@@ -346,7 +346,7 @@ def render_sidebar():
             channels = sorted(df['channel'].dropna().unique().tolist()) if 'channel' in df.columns else []
             sel_ch = st.multiselect("Channel", channels, placeholder="Semua channel")
 
-            if st.button("🔎 Terapkan Filter", use_container_width=True):
+            if st.button("🔎 Terapkan Filter"):
                 filtered = df.copy()
                 if d1 and d2 and 'date' in df.columns:
                     filtered = filtered[(filtered['date'].dt.date >= d1) & (filtered['date'].dt.date <= d2)]
@@ -360,7 +360,7 @@ def render_sidebar():
                 st.session_state.analyzer    = SalesAnalyzer(filtered)
                 st.success(f"Filter diterapkan: {len(filtered):,} records")
 
-            if st.button("❌ Reset Filter", use_container_width=True):
+            if st.button("❌ Reset Filter"):
                 st.session_state.df_filtered = None
                 st.session_state.analyzer    = SalesAnalyzer(df)
                 st.rerun()
@@ -812,7 +812,7 @@ def tab_anomaly():
         st.markdown('<div class="glass-card"><p class="card-title">⚙️ Settings</p>', unsafe_allow_html=True)
         method = st.selectbox("Metode", ['isolation_forest','zscore'])
         contamination = st.slider("Expected Outlier %", 1, 20, 5) / 100
-        if st.button("🔍 Deteksi Anomali", type="primary", use_container_width=True):
+        if st.button("🔍 Deteksi Anomali", type="primary"):
             with st.spinner("Mendeteksi..."):
                 try:
                     det = AnomalyDetector(method=method, contamination=contamination)
@@ -860,7 +860,7 @@ def tab_forecast():
         model_type = st.selectbox("Model", ['gradient_boosting','random_forest','extra_trees','ensemble','xgboost','lightgbm','ridge','linear'])
         periods    = st.slider("Periode Forecast (hari)", 7, 180, 30)
         do_tuning  = st.checkbox("Hyperparameter Tuning", False)
-        if st.button("🚀 Train & Forecast", type="primary", use_container_width=True):
+        if st.button("🚀 Train & Forecast", type="primary"):
             with st.spinner(f"Training {model_type}..."):
                 try:
                     fc = SalesForecaster(model_type=model_type)
@@ -912,7 +912,7 @@ def tab_models():
     df = get_df()
     if df is None: return empty("⚖️","Belum ada data")
 
-    if st.button("🚀 Bandingkan Semua Model", type="primary", use_container_width=True):
+    if st.button("🚀 Bandingkan Semua Model", type="primary"):
         with st.spinner("Training semua model... (3–5 menit)"):
             try:
                 comp = ModelComparator()
@@ -956,7 +956,7 @@ def tab_reports():
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown('<div class="glass-card"><p class="card-title">📄 PDF Report</p>', unsafe_allow_html=True)
-        if st.button("Generate PDF", use_container_width=True):
+        if st.button("Generate PDF"):
             with st.spinner("Generating..."):
                 try:
                     Path('reports').mkdir(exist_ok=True)
@@ -969,7 +969,7 @@ def tab_reports():
         st.markdown('</div>', unsafe_allow_html=True)
     with c2:
         st.markdown('<div class="glass-card"><p class="card-title">📊 Excel Report</p>', unsafe_allow_html=True)
-        if st.button("Generate Excel", use_container_width=True):
+        if st.button("Generate Excel"):
             with st.spinner("Generating..."):
                 try:
                     Path('reports').mkdir(exist_ok=True)
@@ -983,7 +983,7 @@ def tab_reports():
         st.markdown('</div>', unsafe_allow_html=True)
     with c3:
         st.markdown('<div class="glass-card"><p class="card-title">📁 CSV Export</p>', unsafe_allow_html=True)
-        if st.button("Export CSV ZIP", use_container_width=True):
+        if st.button("Export CSV ZIP"):
             with st.spinner("Exporting..."):
                 try:
                     import zipfile
