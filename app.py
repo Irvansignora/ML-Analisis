@@ -42,10 +42,16 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 }
 
 #MainMenu { visibility: hidden !important; }
-header[data-testid="stHeader"] { height: 0px !important; min-height: 0px !important; overflow: hidden !important; }
 footer { visibility: hidden !important; }
 [data-testid="stDecoration"] { display: none !important; }
-.main .block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; max-width: 100% !important; }
+/* Biarkan header tetap ada (untuk tombol sidebar toggle), tapi buat transparan & minimal */
+header[data-testid="stHeader"] {
+    background: transparent !important;
+    border-bottom: none !important;
+}
+/* Sembunyikan toolbar kanan (deploy, share, dll) tapi biarkan tombol sidebar tetap ada */
+[data-testid="stToolbar"] { visibility: hidden !important; }
+.main .block-container { padding-top: 3rem !important; padding-bottom: 1rem !important; max-width: 100% !important; }
 
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, rgba(2,11,24,0.97) 0%, rgba(3,20,46,0.98) 100%) !important;
@@ -169,16 +175,6 @@ footer { visibility: hidden !important; }
 }
 [data-testid="stFileUploaderDropzoneInstructions"] div span { color: #7dd3fc !important; font-weight: 500 !important; }
 [data-testid="stFileUploaderDropzoneInstructions"] div small { color: #64748b !important; }
-[data-testid="stFileUploaderDropzone"] button {
-    background: transparent !important;
-    border: 1px solid rgba(6,182,212,0.4) !important;
-    color: #7dd3fc !important;
-    font-weight: 500 !important;
-}
-[data-testid="stFileUploaderDropzone"] button:hover {
-    background: rgba(6,182,212,0.1) !important;
-    color: #38bdf8 !important;
-}
 
 [data-testid="metric-container"] {
     background: rgba(6,182,212,0.07) !important; backdrop-filter: blur(12px) !important;
@@ -322,7 +318,7 @@ def render_sidebar():
                 dmin, dmax = df['date'].min().date(), df['date'].max().date()
                 st.markdown(f'<div class="stat-badge">📅 {dmin} → {dmax}</div>', unsafe_allow_html=True)
             if st.session_state.df_filtered is not None:
-                st.markdown(f'<div class="stat-badge" style="border-color:rgba(245,158,11,0.5);color:#fbbf24">🔍 {len(st.session_state.df_filtered):,} filtered</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="stat-badge" style="border-color:rgba(245,158,11,0.4);color:#fbbf24">🔍 {len(st.session_state.df_filtered):,} filtered</div>', unsafe_allow_html=True)
 
         st.markdown("---")
         st.markdown("##### ⚙️ Model Settings")
@@ -1055,59 +1051,17 @@ def main():
         "📑 Reports"
     ])
 
-    # Tab 0: Dashboard — filter di dalam, bukan di header
+    # ── TAB 0: DASHBOARD ──
     with tabs[0]:
         df_raw = st.session_state.df
 
-        # ── Filter Bar (muncul hanya jika ada data) ──
-        if df_raw is not None:
-            with st.expander("🔍 Filter Data", expanded=False):
-                fc1, fc2, fc3, fc4 = st.columns(4)
-                with fc1:
-                    if 'date' in df_raw.columns:
-                        d1, d2 = st.date_input("Rentang Tanggal",
-                            value=[df_raw['date'].min().date(), df_raw['date'].max().date()],
-                            min_value=df_raw['date'].min().date(), max_value=df_raw['date'].max().date(),
-                            key="dash_date")
-                    else:
-                        d1, d2 = None, None
-                with fc2:
-                    cats = sorted(df_raw['category'].dropna().unique().tolist()) if 'category' in df_raw.columns else []
-                    sel_cat = st.multiselect("Kategori", cats, placeholder="Semua", key="dash_cat")
-                with fc3:
-                    regions = sorted(df_raw['region'].dropna().unique().tolist()) if 'region' in df_raw.columns else []
-                    sel_reg = st.multiselect("Wilayah", regions, placeholder="Semua", key="dash_reg")
-                with fc4:
-                    channels = sorted(df_raw['channel'].dropna().unique().tolist()) if 'channel' in df_raw.columns else []
-                    sel_ch = st.multiselect("Channel", channels, placeholder="Semua", key="dash_ch")
-
-                btn1, btn2 = st.columns(2)
-                with btn1:
-                    if st.button("🔎 Terapkan Filter", use_container_width=True):
-                        filtered = df_raw.copy()
-                        if d1 and d2 and 'date' in df_raw.columns:
-                            filtered = filtered[(filtered['date'].dt.date >= d1) & (filtered['date'].dt.date <= d2)]
-                        if sel_cat and 'category' in df_raw.columns:
-                            filtered = filtered[filtered['category'].isin(sel_cat)]
-                        if sel_reg and 'region' in df_raw.columns:
-                            filtered = filtered[filtered['region'].isin(sel_reg)]
-                        if sel_ch and 'channel' in df_raw.columns:
-                            filtered = filtered[filtered['channel'].isin(sel_ch)]
-                        st.session_state.df_filtered = filtered
-                        st.session_state.analyzer    = SalesAnalyzer(filtered)
-                        st.success(f"✅ Filter diterapkan: {len(filtered):,} records")
-                        st.rerun()
-                with btn2:
-                    if st.button("❌ Reset Filter", use_container_width=True):
-                        st.session_state.df_filtered = None
-                        st.session_state.analyzer    = SalesAnalyzer(df_raw)
-                        st.rerun()
-
-        # ── Sub-navigasi Dashboard ──
+        # ── Baris navigasi + filter dalam satu baris ──
         st.markdown("""
         <style>
-        div[data-testid="stHorizontalBlock"] > div > div[data-testid="stRadio"] > label { display: none; }
-        div[data-testid="stRadio"] > div { gap: 6px !important; flex-wrap: wrap !important; }
+        /* Radio sub-nav styling */
+        div[data-testid="stRadio"] > div {
+            gap: 6px !important; flex-wrap: wrap !important;
+        }
         div[data-testid="stRadio"] > div > label {
             background: rgba(6,182,212,0.08) !important;
             border: 1px solid rgba(6,182,212,0.25) !important;
@@ -1116,38 +1070,80 @@ def main():
             cursor: pointer !important; transition: all 0.2s !important;
         }
         div[data-testid="stRadio"] > div > label:hover {
-            background: rgba(6,182,212,0.18) !important;
+            background: rgba(6,182,212,0.2) !important;
             border-color: rgba(6,182,212,0.5) !important;
         }
-        div[data-testid="stRadio"] > div > label[data-baseweb="radio"] input:checked + div {
-            background: linear-gradient(135deg,#0369a1,#0ea5e9) !important;
+        /* Filter expander style */
+        [data-testid="stExpander"] {
+            background: rgba(6,182,212,0.05) !important;
+            border: 1px solid rgba(6,182,212,0.2) !important;
+            border-radius: 10px !important;
         }
+        [data-testid="stExpander"] summary { color: #7dd3fc !important; font-size: 0.85rem !important; font-weight: 500 !important; }
         </style>
         """, unsafe_allow_html=True)
 
-        dashboard_view = st.radio(
-            "view",
-            ["📊 KPI Overview", "📈 Sales Performance", "💰 Profitability",
-             "👥 Customer & RFM", "📍 Regional", "🎯 Category & Pareto"],
-            horizontal=True,
-            label_visibility="collapsed",
-            key="dashboard_view"
-        )
+        nav_col, filter_col = st.columns([3, 1])
+
+        with nav_col:
+            dashboard_view = st.radio(
+                "view",
+                ["📊 KPI Overview", "📈 Sales Performance", "💰 Profitability",
+                 "👥 Customer & RFM", "📍 Regional", "🎯 Category & Pareto"],
+                horizontal=True,
+                label_visibility="collapsed",
+                key="dashboard_view"
+            )
+
+        with filter_col:
+            if df_raw is not None:
+                with st.expander("🔍 Filter", expanded=False):
+                    if 'date' in df_raw.columns:
+                        d1, d2 = st.date_input("Tanggal",
+                            value=[df_raw['date'].min().date(), df_raw['date'].max().date()],
+                            min_value=df_raw['date'].min().date(), max_value=df_raw['date'].max().date(),
+                            key="dash_date")
+                    else:
+                        d1, d2 = None, None
+
+                    cats = sorted(df_raw['category'].dropna().unique().tolist()) if 'category' in df_raw.columns else []
+                    sel_cat = st.multiselect("Kategori", cats, placeholder="Semua", key="dash_cat")
+
+                    regions = sorted(df_raw['region'].dropna().unique().tolist()) if 'region' in df_raw.columns else []
+                    sel_reg = st.multiselect("Wilayah", regions, placeholder="Semua", key="dash_reg")
+
+                    channels = sorted(df_raw['channel'].dropna().unique().tolist()) if 'channel' in df_raw.columns else []
+                    sel_ch = st.multiselect("Channel", channels, placeholder="Semua", key="dash_ch")
+
+                    b1, b2 = st.columns(2)
+                    with b1:
+                        if st.button("✅ Terapkan", use_container_width=True, key="btn_apply"):
+                            filtered = df_raw.copy()
+                            if d1 and d2 and 'date' in df_raw.columns:
+                                filtered = filtered[(filtered['date'].dt.date >= d1) & (filtered['date'].dt.date <= d2)]
+                            if sel_cat and 'category' in df_raw.columns:
+                                filtered = filtered[filtered['category'].isin(sel_cat)]
+                            if sel_reg and 'region' in df_raw.columns:
+                                filtered = filtered[filtered['region'].isin(sel_reg)]
+                            if sel_ch and 'channel' in df_raw.columns:
+                                filtered = filtered[filtered['channel'].isin(sel_ch)]
+                            st.session_state.df_filtered = filtered
+                            st.session_state.analyzer    = SalesAnalyzer(filtered)
+                            st.rerun()
+                    with b2:
+                        if st.button("❌ Reset", use_container_width=True, key="btn_reset"):
+                            st.session_state.df_filtered = None
+                            st.session_state.analyzer    = SalesAnalyzer(df_raw)
+                            st.rerun()
 
         st.markdown('<hr style="border:none;border-top:1px solid rgba(6,182,212,0.15);margin:8px 0 16px 0">', unsafe_allow_html=True)
 
-        if dashboard_view == "📊 KPI Overview":
-            tab_kpi()
-        elif dashboard_view == "📈 Sales Performance":
-            tab_sales()
-        elif dashboard_view == "💰 Profitability":
-            tab_profit()
-        elif dashboard_view == "👥 Customer & RFM":
-            tab_customer()
-        elif dashboard_view == "📍 Regional":
-            tab_regional()
-        elif dashboard_view == "🎯 Category & Pareto":
-            tab_category()
+        if dashboard_view == "📊 KPI Overview":      tab_kpi()
+        elif dashboard_view == "📈 Sales Performance": tab_sales()
+        elif dashboard_view == "💰 Profitability":     tab_profit()
+        elif dashboard_view == "👥 Customer & RFM":    tab_customer()
+        elif dashboard_view == "📍 Regional":          tab_regional()
+        elif dashboard_view == "🎯 Category & Pareto": tab_category()
 
     with tabs[1]: tab_anomaly()
     with tabs[2]: tab_forecast()
