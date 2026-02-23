@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # Streamlit Dashboard
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: sales-ml-dashboard:latest
+    container_name: sales-ml-dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./reports:/app/reports
+      - ./uploads:/app/uploads
+    environment:
+      - PORT=8501
+      - API_PORT=5000
+      - PYTHONUNBUFFERED=1
+    command: streamlit
+    networks:
+      - sales-ml-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Flask API Server
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api-only
+    image: sales-ml-api:latest
+    container_name: sales-ml-api
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./uploads:/app/uploads
+    environment:
+      - API_PORT=5000
+      - PYTHONUNBUFFERED=1
+      - FLASK_ENV=production
+    command: api
+    networks:
+      - sales-ml-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Jupyter Notebook untuk development
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    image: sales-ml-dev:latest
+    container_name: sales-ml-jupyter
+    ports:
+      - "8888:8888"
+      - "8501:8501"
+      - "5000:5000"
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./reports:/app/reports
+      - ./uploads:/app/uploads
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+    command: jupyter
+    networks:
+      - sales-ml-network
+    profiles:
+      - dev  # Only start when explicitly requested: docker-compose --profile dev up
+
+networks:
+  sales-ml-network:
+    driver: bridge
+
+volumes:
+  data:
+  models:
+  reports:
+  uploads:
