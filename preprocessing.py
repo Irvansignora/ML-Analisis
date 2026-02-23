@@ -27,21 +27,41 @@ class DataPreprocessor:
     # Mapping kolom umum untuk standarisasi
     COLUMN_MAPPINGS = {
         # Date columns
-        'date': ['date', 'tanggal', 'tgl', 'order_date', 'transaction_date', 'sale_date', 'timestamp', 'waktu', 'tanggal_transaksi'],
+        'date': ['date', 'tanggal', 'tgl', 'order_date', 'transaction_date', 'sale_date',
+                 'timestamp', 'waktu', 'tanggal_transaksi', 'tanggal_penjualan',
+                 'tanggal_order', 'tgl_transaksi', 'tgl_penjualan', 'tgl_order',
+                 'created_at', 'updated_at', 'invoice_date', 'tanggal_faktur'],
         # Product columns
-        'product': ['product', 'produk', 'product_name', 'nama_produk', 'item', 'item_name', 'nama_barang', 'barang'],
+        'product': ['product', 'produk', 'product_name', 'nama_produk', 'item', 'item_name',
+                    'nama_barang', 'barang', 'nama_item', 'deskripsi_produk', 'product_desc',
+                    'sku', 'nama', 'goods', 'merchandise', 'komoditi', 'nama_produk/jasa'],
         # Quantity columns
-        'quantity': ['quantity', 'qty', 'jumlah', 'amount', 'jml', 'jumlah_barang', 'unit'],
+        'quantity': ['quantity', 'qty', 'jumlah', 'amount', 'jml', 'jumlah_barang', 'unit',
+                     'kuantitas', 'banyak', 'jml_barang', 'jumlah_unit', 'unit_terjual',
+                     'qty_sold', 'terjual', 'jumlah_terjual', 'volume', 'pieces', 'pcs'],
         # Price columns
-        'price': ['price', 'harga', 'unit_price', 'harga_satuan', 'price_per_unit', 'harga_jual'],
+        'price': ['price', 'harga', 'unit_price', 'harga_satuan', 'price_per_unit', 'harga_jual',
+                  'harga_per_unit', 'harga_item', 'unit_cost', 'selling_price',
+                  'harga_pokok', 'hpp', 'cost', 'rate', 'tarif'],
         # Revenue/Sales columns
-        'revenue': ['revenue', 'total', 'total_price', 'total_amount', 'penjualan', 'total_harga', 'sales', 'omset', 'total_revenue'],
+        'revenue': ['revenue', 'total', 'total_price', 'total_amount', 'penjualan', 'total_harga',
+                    'sales', 'omset', 'total_revenue', 'subtotal', 'sub_total', 'grand_total',
+                    'total_penjualan', 'total_bayar', 'total_pembayaran', 'nilai_penjualan',
+                    'nilai', 'nominal', 'jumlah_total', 'total_transaksi', 'pendapatan',
+                    'income', 'gross_sales', 'net_sales', 'total_sales', 'sale_amount',
+                    'harga_total', 'total_harga_jual'],
         # Category columns
-        'category': ['category', 'kategori', 'product_category', 'kategori_produk', 'type', 'jenis'],
+        'category': ['category', 'kategori', 'product_category', 'kategori_produk', 'type',
+                     'jenis', 'tipe', 'divisi', 'division', 'group', 'grup', 'kelompok',
+                     'product_group', 'product_type', 'jenis_produk', 'kelas'],
         # Customer columns
-        'customer': ['customer', 'customer_id', 'pelanggan', 'customer_name', 'nama_pelanggan', 'buyer'],
+        'customer': ['customer', 'customer_id', 'pelanggan', 'customer_name', 'nama_pelanggan',
+                     'buyer', 'pembeli', 'nama_pembeli', 'client', 'klien', 'konsumen',
+                     'nama_customer', 'nama_klien', 'id_pelanggan'],
         # Region/Location columns
-        'region': ['region', 'lokasi', 'location', 'area', 'city', 'kota', 'province', 'provinsi', 'wilayah']
+        'region': ['region', 'lokasi', 'location', 'area', 'city', 'kota', 'province',
+                   'provinsi', 'wilayah', 'cabang', 'branch', 'store', 'toko', 'outlet',
+                   'nama_toko', 'nama_cabang', 'alamat', 'address', 'district', 'kecamatan']
     }
     
     def __init__(self):
@@ -124,11 +144,23 @@ class DataPreprocessor:
         df.columns = [col.lower().strip().replace(' ', '_') for col in df.columns]
         
         for standard_name, variations in self.COLUMN_MAPPINGS.items():
+            if standard_name in [v for v in new_columns.values()]:
+                continue  # already mapped
             for col in df.columns:
-                if col in variations or col in [v.lower() for v in variations]:
+                col_clean = col.lower().strip().replace(' ', '_')
+                variations_lower = [v.lower().replace(' ', '_') for v in variations]
+                # Exact match first
+                if col_clean in variations_lower:
                     new_columns[col] = standard_name
                     self.mapped_columns[standard_name] = col
                     break
+                # Partial/substring match as fallback
+                for var in variations_lower:
+                    if var in col_clean or col_clean in var:
+                        if col not in new_columns:  # dont overwrite exact match
+                            new_columns[col] = standard_name
+                            self.mapped_columns[standard_name] = col
+                        break
         
         df = df.rename(columns=new_columns)
         logger.info(f"Columns standardized: {new_columns}")
@@ -274,26 +306,36 @@ class DataPreprocessor:
     
     def calculate_revenue(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Kalkulasi revenue jika belum ada
-        
-        Parameters:
-        -----------
-        df : pd.DataFrame
-            DataFrame input
-            
-        Returns:
-        --------
-        pd.DataFrame
-            DataFrame dengan kolom revenue
+        Kalkulasi revenue jika belum ada. Coba berbagai kombinasi kolom.
         """
         df = df.copy()
         
         if 'revenue' not in df.columns:
             if 'quantity' in df.columns and 'price' in df.columns:
-                df['revenue'] = df['quantity'] * df['price']
+                df['revenue'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0) *                                 pd.to_numeric(df['price'], errors='coerce').fillna(0)
                 logger.info("Revenue dikalkulasi dari quantity * price")
             else:
-                logger.warning("Tidak bisa kalkulasi revenue: quantity atau price tidak ada")
+                # Cari kolom numerik dengan nama yang mirip total/nilai/amount
+                numeric_cols = df.select_dtypes(include='number').columns.tolist()
+                revenue_keywords = ['total', 'amount', 'nilai', 'nominal', 'sales', 'omset',
+                                    'pendapatan', 'income', 'bayar', 'harga_total']
+                for col in numeric_cols:
+                    col_lower = col.lower()
+                    if any(kw in col_lower for kw in revenue_keywords):
+                        df['revenue'] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                        logger.info(f"Revenue diambil dari kolom: {col}")
+                        break
+                else:
+                    # Last resort: gunakan kolom numerik terbesar nilainya
+                    if numeric_cols:
+                        best_col = df[numeric_cols].mean().idxmax()
+                        df['revenue'] = pd.to_numeric(df[best_col], errors='coerce').fillna(0)
+                        logger.warning(f"Revenue fallback ke kolom: {best_col}")
+                    else:
+                        logger.warning("Tidak bisa kalkulasi revenue: tidak ada kolom numerik")
+        else:
+            # Pastikan revenue sudah numeric
+            df['revenue'] = pd.to_numeric(df['revenue'], errors='coerce').fillna(0)
         
         return df
     
