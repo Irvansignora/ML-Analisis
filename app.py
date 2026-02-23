@@ -1121,6 +1121,70 @@ def tab_reports():
 def main():
     render_sidebar()
 
+    # ── Floating toggle button custom ──
+    st.markdown("""
+    <style>
+    #sidebar-float-btn {
+        position: fixed;
+        bottom: 2rem;
+        left: 1rem;
+        z-index: 999999;
+        width: 2.4rem;
+        height: 2.4rem;
+        background: rgba(3,20,46,0.85);
+        border: 1.5px solid rgba(6,182,212,0.55);
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(10px);
+        transition: all 0.2s;
+        box-shadow: 0 4px 16px rgba(6,182,212,0.25);
+    }
+    #sidebar-float-btn:hover {
+        background: rgba(6,182,212,0.25);
+        border-color: #38bdf8;
+        transform: scale(1.1);
+        box-shadow: 0 6px 20px rgba(6,182,212,0.4);
+    }
+    </style>
+    <div id="sidebar-float-btn" title="Toggle Sidebar" onclick="toggleSB()">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round">
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <polyline points="9 21 3 21 3 15"></polyline>
+            <line x1="21" y1="3" x2="14" y2="10"></line>
+            <line x1="3" y1="21" x2="10" y2="14"></line>
+        </svg>
+    </div>
+    <script>
+    function toggleSB() {
+        var selectors = [
+            '[data-testid="collapsedControl"] button',
+            '[data-testid="stSidebarCollapsedControl"] button',
+            'button[aria-label="Close sidebar"]',
+            'button[aria-label="Open sidebar"]'
+        ];
+        for (var i = 0; i < selectors.length; i++) {
+            var btn = document.querySelector(selectors[i]);
+            if (btn) { btn.click(); setTimeout(updateIcon, 350); return; }
+        }
+    }
+    function updateIcon() {
+        var el = document.getElementById('sidebar-float-btn');
+        if (!el) return;
+        var sb = document.querySelector('[data-testid="stSidebar"]');
+        var open = sb && sb.offsetWidth > 60;
+        el.innerHTML = open
+          ? '<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"#38bdf8\" stroke-width=\"2\" stroke-linecap=\"round\"><polyline points=\"15 3 21 3 21 9\"></polyline><polyline points=\"9 21 3 21 3 15\"></polyline><line x1=\"21\" y1=\"3\" x2=\"14\" y2=\"10\"></line><line x1=\"3\" y1=\"21\" x2=\"10\" y2=\"14\"></line></svg>'
+          : '<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"#38bdf8\" stroke-width=\"2\" stroke-linecap=\"round\"><polyline points=\"9 3 3 3 3 9\"></polyline><polyline points=\"15 21 21 21 21 15\"></polyline><line x1=\"3\" y1=\"3\" x2=\"10\" y2=\"10\"></line><line x1=\"21\" y1=\"21\" x2=\"14\" y2=\"14\"></line></svg>';
+    }
+    setTimeout(updateIcon, 600);
+    window.addEventListener('resize', function(){ setTimeout(updateIcon, 300); });
+    </script>
+    """, unsafe_allow_html=True)
+
+
     st.markdown("""
     <style>
     /* Selectbox dashboard teks putih */
