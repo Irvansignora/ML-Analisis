@@ -1,3 +1,9 @@
+"""
+Sales ML Analytics Dashboard - Full Rebuild
+============================================
+CEO-level dashboard: KPI, Sales, Profitability, Customer, Regional, Forecast, Anomaly
+"""
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -19,7 +25,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-
+# ── OCEAN BLUE GLASSMORPHISM CSS ──────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -36,10 +42,40 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 }
 
 #MainMenu { visibility: hidden !important; }
-header[data-testid="stHeader"] { height: 0px !important; min-height: 0px !important; overflow: hidden !important; }
 footer { visibility: hidden !important; }
 [data-testid="stDecoration"] { display: none !important; }
-.main .block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; max-width: 100% !important; }
+[data-testid="stToolbar"] { visibility: hidden !important; }
+
+/* Header tetap ada - jangan di-hide agar toggle sidebar tidak hilang */
+header[data-testid="stHeader"] {
+    background: rgba(2,11,24,0.97) !important;
+    backdrop-filter: blur(12px) !important;
+    border-bottom: 1px solid rgba(6,182,212,0.1) !important;
+}
+
+/* Paksa tombol collapse sidebar selalu muncul di semua kondisi termasuk maximize */
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    z-index: 999999 !important;
+}
+[data-testid="collapsedControl"] button {
+    display: flex !important;
+    visibility: visible !important;
+    background: rgba(6,182,212,0.15) !important;
+    border: 1px solid rgba(6,182,212,0.4) !important;
+    border-radius: 8px !important;
+    color: #7dd3fc !important;
+}
+[data-testid="collapsedControl"] svg {
+    display: block !important;
+    visibility: visible !important;
+    fill: #38bdf8 !important;
+}
+
+.main .block-container { padding-top: 4rem !important; padding-bottom: 1rem !important; max-width: 100% !important; }
 
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, rgba(2,11,24,0.97) 0%, rgba(3,20,46,0.98) 100%) !important;
@@ -147,10 +183,12 @@ footer { visibility: hidden !important; }
     background: rgba(2,11,24,0.7); backdrop-filter: blur(12px);
     border-radius: 12px; padding: 4px; gap: 3px;
     border: 1px solid rgba(6,182,212,0.15);
+    width: 100% !important;
 }
 .stTabs [data-baseweb="tab"] {
     border-radius: 8px !important; color: #7dd3fc !important;
     font-weight: 500 !important; padding: 7px 16px !important; border: none !important;
+    flex: 1 !important; justify-content: center !important;
 }
 .stTabs [aria-selected="true"] {
     background: linear-gradient(135deg, #0369a1, #0ea5e9) !important;
@@ -164,14 +202,9 @@ footer { visibility: hidden !important; }
 [data-testid="stFileUploaderDropzoneInstructions"] div span { color: #7dd3fc !important; font-weight: 500 !important; }
 [data-testid="stFileUploaderDropzoneInstructions"] div small { color: #64748b !important; }
 [data-testid="stFileUploaderDropzone"] button {
-    background: transparent !important;
-    border: 1px solid rgba(6,182,212,0.4) !important;
-    color: #7dd3fc !important;
-    font-weight: 500 !important;
-}
-[data-testid="stFileUploaderDropzone"] button:hover {
-    background: rgba(6,182,212,0.1) !important;
-    color: #38bdf8 !important;
+    background: rgba(6,182,212,0.15) !important;
+    border: 1px solid rgba(6,182,212,0.5) !important;
+    border-radius: 8px !important; color: #ffffff !important; font-weight: 600 !important;
 }
 
 [data-testid="metric-container"] {
@@ -374,7 +407,7 @@ def tab_kpi():
     txn = len(df)
     aov = rev / txn if txn else 0
 
-a    # Estimate profit (pakai margin 30% jika tidak ada cost)
+    # Estimate profit (pakai margin 30% jika tidak ada cost)
     has_cost = 'cost' in df.columns or 'hpp' in df.columns
     cost_col = 'cost' if 'cost' in df.columns else ('hpp' if 'hpp' in df.columns else None)
     if cost_col:
@@ -1077,34 +1110,79 @@ def tab_reports():
 # ── MAIN ─────────────────────────────────────────────────────────────────────
 def main():
     render_sidebar()
-    tabs = st.tabs([
-        "📊 Dashboard",
-        "🚨 Anomaly",
-        "🔮 Forecast",
-        "⚖️ Model Comparison",
-        "📑 Reports"
-    ])
 
-    # Tab 0: Dashboard (KPI Overview + sub-filter)
+    st.markdown("""
+    <style>
+    [data-testid="stSelectbox"] > div > div > div { color: #ffffff !important; font-weight: 600 !important; }
+    [data-testid="stSelectbox"] svg { fill: #7dd3fc !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    tabs = st.tabs(["📊 Dashboard", "🚨 Anomaly", "🔮 Forecast", "⚖️ Model Comparison", "📑 Reports"])
+
     with tabs[0]:
-        dashboard_view = st.selectbox(
-            "Pilih Tampilan",
-            ["📊 KPI Overview", "📈 Sales Performance", "💰 Profitability",
-             "👥 Customer & RFM", "📍 Regional", "🎯 Category & Pareto"],
-            label_visibility="collapsed"
-        )
-        if dashboard_view == "📊 KPI Overview":
-            tab_kpi()
-        elif dashboard_view == "📈 Sales Performance":
-            tab_sales()
-        elif dashboard_view == "💰 Profitability":
-            tab_profit()
-        elif dashboard_view == "👥 Customer & RFM":
-            tab_customer()
-        elif dashboard_view == "📍 Regional":
-            tab_regional()
-        elif dashboard_view == "🎯 Category & Pareto":
-            tab_category()
+        df_raw = st.session_state.df
+
+        # Dropdown hanya selebar tab Dashboard (kolom kiri ~40%)
+        left, _ = st.columns([2, 3])
+        with left:
+            dashboard_view = st.selectbox(
+                "view",
+                ["📊 KPI Overview", "📈 Sales Performance", "💰 Profitability",
+                 "👥 Customer & RFM", "📍 Regional", "🎯 Category & Pareto"],
+                label_visibility="collapsed", key="dashboard_view"
+            )
+
+        st.markdown('<hr style="border:none;border-top:1px solid rgba(6,182,212,0.15);margin:4px 0 12px 0">', unsafe_allow_html=True)
+
+        if   dashboard_view == "📊 KPI Overview":       tab_kpi()
+        elif dashboard_view == "📈 Sales Performance":  tab_sales()
+        elif dashboard_view == "💰 Profitability":      tab_profit()
+        elif dashboard_view == "👥 Customer & RFM":     tab_customer()
+        elif dashboard_view == "📍 Regional":           tab_regional()
+        elif dashboard_view == "🎯 Category & Pareto":  tab_category()
+
+    with tabs[1]: tab_anomaly()
+    with tabs[2]: tab_forecast()
+    with tabs[3]: tab_models()
+    with tabs[4]: tab_reports()
+
+if __name__ == "__main__":
+    main()# ── MAIN ──────────────────────────────────────────────────────────────────────
+def main():
+    render_sidebar()
+
+    st.markdown("""
+    <style>
+    /* Selectbox dashboard teks putih */
+    [data-testid="stSelectbox"] > div > div > div { color: #ffffff !important; font-weight: 600 !important; }
+    [data-testid="stSelectbox"] svg { fill: #7dd3fc !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    tabs = st.tabs(["📊 Dashboard", "🚨 Anomaly", "🔮 Forecast", "⚖️ Model Comparison", "📑 Reports"])
+
+    with tabs[0]:
+        df_raw = st.session_state.df
+
+        # Dropdown navigasi sejajar dengan tab Dashboard (lebar pas, tidak full page)
+        left, _ = st.columns([2, 3])
+        with left:
+            dashboard_view = st.selectbox(
+                "view",
+                ["📊 KPI Overview", "📈 Sales Performance", "💰 Profitability",
+                 "👥 Customer & RFM", "📍 Regional", "🎯 Category & Pareto"],
+                label_visibility="collapsed", key="dashboard_view"
+            )
+
+        st.markdown('<hr style="border:none;border-top:1px solid rgba(6,182,212,0.15);margin:4px 0 12px 0">', unsafe_allow_html=True)
+
+        if   dashboard_view == "📊 KPI Overview":       tab_kpi()
+        elif dashboard_view == "📈 Sales Performance":  tab_sales()
+        elif dashboard_view == "💰 Profitability":      tab_profit()
+        elif dashboard_view == "👥 Customer & RFM":     tab_customer()
+        elif dashboard_view == "📍 Regional":           tab_regional()
+        elif dashboard_view == "🎯 Category & Pareto":  tab_category()
 
     with tabs[1]: tab_anomaly()
     with tabs[2]: tab_forecast()
