@@ -25,140 +25,171 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ── MODERN CSS ─────────────────────────────────────────────────────────────────
+# ── OCEAN BLUE GLASSMORPHISM CSS ──────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-/* ── Global ── */
-html, body, [class*="css"] {
-    font-family: 'Inter', sans-serif;
-}
-.main { background: #0f1117; }
+/* ── Global Reset ── */
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+
+/* ── Ocean Background ── */
 [data-testid="stAppViewContainer"] {
-    background: linear-gradient(135deg, #0f1117 0%, #1a1d2e 50%, #0f1117 100%);
+    background:
+        radial-gradient(ellipse at 0% 0%,   rgba(6,182,212,0.18) 0%, transparent 50%),
+        radial-gradient(ellipse at 100% 0%,  rgba(14,165,233,0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 100%, rgba(6,182,212,0.12) 0%, transparent 60%),
+        linear-gradient(160deg, #020b18 0%, #03142e 40%, #041d3d 70%, #020b18 100%);
     min-height: 100vh;
 }
-[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #1a1d2e 0%, #0f1117 100%) !important;
-    border-right: 1px solid rgba(99,102,241,0.2);
+
+/* ── Animated bg dots ── */
+[data-testid="stAppViewContainer"]::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+        radial-gradient(circle at 20% 30%, rgba(6,182,212,0.06) 0%, transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(14,165,233,0.08) 0%, transparent 40%),
+        radial-gradient(circle at 60% 20%, rgba(56,189,248,0.05) 0%, transparent 30%);
+    pointer-events: none;
+    z-index: 0;
 }
-[data-testid="stSidebar"] * { color: #e2e8f0 !important; }
+
+/* ── Sidebar Ocean ── */
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg,
+        rgba(2,11,24,0.97) 0%,
+        rgba(3,20,46,0.98) 100%) !important;
+    border-right: 1px solid rgba(6,182,212,0.2) !important;
+    backdrop-filter: blur(20px);
+}
+[data-testid="stSidebar"] * { color: #e0f2fe !important; }
+[data-testid="stSidebar"] .stMarkdown p { color: #94a3b8 !important; }
 
 /* ── Hero Header ── */
 .hero-header {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
+    background: linear-gradient(135deg,
+        rgba(6,182,212,0.9) 0%,
+        rgba(14,165,233,0.85) 50%,
+        rgba(56,189,248,0.8) 100%);
     border-radius: 20px;
-    padding: 40px 50px;
-    margin-bottom: 30px;
+    padding: 38px 48px;
+    margin-bottom: 28px;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 20px 60px rgba(99,102,241,0.3);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.15);
+    box-shadow:
+        0 8px 32px rgba(6,182,212,0.25),
+        inset 0 1px 0 rgba(255,255,255,0.2);
 }
 .hero-header::before {
     content: '';
     position: absolute;
-    top: -50%; right: -10%;
-    width: 400px; height: 400px;
-    background: rgba(255,255,255,0.05);
+    top: -60%; right: -5%;
+    width: 380px; height: 380px;
+    background: rgba(255,255,255,0.06);
     border-radius: 50%;
+    filter: blur(2px);
 }
 .hero-header::after {
     content: '';
     position: absolute;
-    bottom: -30%; left: 60%;
-    width: 250px; height: 250px;
+    bottom: -40%; left: 55%;
+    width: 260px; height: 260px;
     background: rgba(255,255,255,0.04);
     border-radius: 50%;
 }
 .hero-title {
-    font-size: 2.8rem;
+    font-size: 2.6rem;
     font-weight: 800;
-    color: white;
+    color: #ffffff;
     margin: 0;
-    letter-spacing: -1px;
+    letter-spacing: -0.5px;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.2);
     position: relative; z-index: 1;
 }
 .hero-sub {
-    font-size: 1.1rem;
-    color: rgba(255,255,255,0.95);
+    font-size: 1.05rem;
+    color: rgba(255,255,255,0.92);
     margin: 8px 0 0 0;
     font-weight: 400;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.15);
     position: relative; z-index: 1;
 }
 
-/* ── KPI Cards ── */
-.kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 16px;
-    margin-bottom: 28px;
-}
+/* ── KPI Cards — Glassmorphism ── */
 .kpi-card {
-    background: linear-gradient(135deg, #1e2130 0%, #252840 100%);
-    border: 1px solid rgba(99,102,241,0.2);
-    border-radius: 16px;
+    background: rgba(6,182,212,0.07);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(6,182,212,0.25);
+    border-radius: 18px;
     padding: 22px 20px;
     position: relative;
     overflow: hidden;
     transition: all 0.3s ease;
+    box-shadow:
+        0 4px 24px rgba(6,182,212,0.08),
+        inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.kpi-card:hover {
+    border-color: rgba(6,182,212,0.45);
+    box-shadow: 0 8px 32px rgba(6,182,212,0.18);
+    transform: translateY(-2px);
 }
 .kpi-card::before {
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0;
-    height: 3px;
+    height: 2px;
+    border-radius: 18px 18px 0 0;
 }
-.kpi-card.purple::before { background: linear-gradient(90deg,#6366f1,#8b5cf6); }
-.kpi-card.cyan::before   { background: linear-gradient(90deg,#06b6d4,#0ea5e9); }
+.kpi-card.purple::before { background: linear-gradient(90deg,#06b6d4,#0ea5e9); }
+.kpi-card.cyan::before   { background: linear-gradient(90deg,#38bdf8,#7dd3fc); }
 .kpi-card.green::before  { background: linear-gradient(90deg,#10b981,#34d399); }
 .kpi-card.orange::before { background: linear-gradient(90deg,#f59e0b,#fbbf24); }
-.kpi-card.pink::before   { background: linear-gradient(90deg,#ec4899,#f472b6); }
-.kpi-icon {
-    font-size: 1.8rem;
-    margin-bottom: 10px;
-    display: block;
-}
+.kpi-card.pink::before   { background: linear-gradient(90deg,#06b6d4,#a5f3fc); }
+.kpi-icon { font-size: 1.8rem; margin-bottom: 10px; display: block; }
 .kpi-value {
-    font-size: 1.4rem;
+    font-size: 1.45rem;
     font-weight: 700;
     color: #ffffff;
     display: block;
     line-height: 1.2;
+    text-shadow: 0 0 20px rgba(6,182,212,0.4);
 }
 .kpi-label {
-    font-size: 0.78rem;
-    color: #cbd5e1;
+    font-size: 0.75rem;
+    color: #bae6fd;
     font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-top: 4px;
+    letter-spacing: 0.8px;
+    margin-top: 5px;
     display: block;
 }
-.kpi-delta {
-    font-size: 0.8rem;
-    margin-top: 8px;
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 20px;
-    font-weight: 600;
-}
-.kpi-delta.up   { background:rgba(16,185,129,0.15); color:#34d399; }
-.kpi-delta.down { background:rgba(239,68,68,0.15);  color:#f87171; }
 
-/* ── Section Cards ── */
+/* ── Section Cards — Glassmorphism ── */
 .section-card {
-    background: linear-gradient(135deg, #1e2130 0%, #252840 100%);
-    border: 1px solid rgba(99,102,241,0.15);
-    border-radius: 16px;
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(6,182,212,0.18);
+    border-radius: 18px;
     padding: 24px;
     margin-bottom: 20px;
+    box-shadow:
+        0 4px 24px rgba(0,0,0,0.2),
+        inset 0 1px 0 rgba(255,255,255,0.06);
 }
 .section-title {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     font-weight: 700;
-    color: #ffffff;
-    margin: 0 0 20px 0;
+    color: #e0f2fe;
+    margin: 0 0 18px 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(6,182,212,0.15);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -166,76 +197,62 @@ html, body, [class*="css"] {
 
 /* ── Insight Cards ── */
 .insight-card {
-    background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.08));
-    border: 1px solid rgba(99,102,241,0.35);
+    background: rgba(6,182,212,0.07);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(6,182,212,0.22);
     border-radius: 12px;
-    padding: 14px 18px;
+    padding: 13px 16px;
     margin-bottom: 10px;
-    color: #e2e8f0;
-    font-size: 0.92rem;
+    color: #e0f2fe;
+    font-size: 0.9rem;
     display: flex;
     align-items: flex-start;
     gap: 10px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
 .insight-card::before { content: '💡'; font-size: 1rem; flex-shrink: 0; }
 
-/* ── Empty state ── */
+/* ── Empty State ── */
 .empty-state {
     text-align: center;
-    padding: 80px 40px;
-    color: #94a3b8;
+    padding: 70px 40px;
+    color: #7dd3fc;
 }
-.empty-state .icon { font-size: 4rem; margin-bottom: 16px; display: block; }
-.empty-state h3 { color: #cbd5e1; font-size: 1.3rem; margin-bottom: 8px; }
+.empty-state .icon { font-size: 3.5rem; margin-bottom: 14px; display: block; }
+.empty-state h3 { color: #bae6fd; font-size: 1.2rem; margin-bottom: 8px; }
+.empty-state p  { color: #64748b; font-size: 0.9rem; }
 
-/* ── Sidebar Enhancements ── */
-.sidebar-logo {
-    text-align: center;
-    padding: 20px 0 10px;
-}
+/* ── Sidebar Logo ── */
+.sidebar-logo { text-align: center; padding: 20px 0 10px; }
 .sidebar-logo .logo-text {
-    font-size: 1.4rem;
+    font-size: 1.5rem;
     font-weight: 800;
-    background: linear-gradient(135deg,#6366f1,#06b6d4);
+    background: linear-gradient(135deg, #38bdf8, #06b6d4, #0ea5e9);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     display: block;
+    filter: drop-shadow(0 0 8px rgba(6,182,212,0.4));
 }
 .sidebar-logo .logo-sub {
-    font-size: 0.75rem;
-    color: #64748b !important;
+    font-size: 0.72rem;
+    color: #475569 !important;
     display: block;
     margin-top: 2px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
 }
-.nav-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: all 0.2s;
-    color: #94a3b8 !important;
-    font-size: 0.92rem;
-    font-weight: 500;
-    margin-bottom: 4px;
-    border: 1px solid transparent;
-}
-.nav-item.active {
-    background: rgba(99,102,241,0.15);
-    border-color: rgba(99,102,241,0.3);
-    color: #a5b4fc !important;
-}
-.nav-item:hover { background: rgba(99,102,241,0.1); }
+
+/* ── Stat Badge ── */
 .stat-badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: rgba(99,102,241,0.18);
-    border: 1px solid rgba(99,102,241,0.35);
+    background: rgba(6,182,212,0.1);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(6,182,212,0.25);
     border-radius: 8px;
     padding: 8px 12px;
-    color: #c7d2fe;
+    color: #7dd3fc;
     font-size: 0.82rem;
     font-weight: 600;
     margin: 4px 0;
@@ -244,72 +261,110 @@ html, body, [class*="css"] {
 
 /* ── Tabs ── */
 .stTabs [data-baseweb="tab-list"] {
-    background: rgba(30,33,48,0.8);
+    background: rgba(2,11,24,0.6);
+    backdrop-filter: blur(12px);
     border-radius: 12px;
     padding: 4px;
     gap: 4px;
-    border: 1px solid rgba(99,102,241,0.15);
+    border: 1px solid rgba(6,182,212,0.15);
 }
 .stTabs [data-baseweb="tab"] {
     border-radius: 8px !important;
-    color: #94a3b8 !important;
+    color: #7dd3fc !important;
     font-weight: 500 !important;
-    padding: 8px 20px !important;
+    padding: 8px 18px !important;
     border: none !important;
+    transition: all 0.2s !important;
 }
 .stTabs [aria-selected="true"] {
-    background: linear-gradient(135deg,#6366f1,#8b5cf6) !important;
+    background: linear-gradient(135deg, #0369a1, #0ea5e9) !important;
     color: white !important;
+    box-shadow: 0 2px 12px rgba(6,182,212,0.35) !important;
 }
 
-/* ── Metrics override ── */
+/* ── File Uploader ── */
+[data-testid="stFileUploader"] {
+    background: rgba(6,182,212,0.05) !important;
+    border: 2px dashed rgba(6,182,212,0.3) !important;
+    border-radius: 14px !important;
+    padding: 8px !important;
+}
+[data-testid="stFileUploader"] * { color: #7dd3fc !important; }
+[data-testid="stFileUploader"] small { color: #475569 !important; }
+
+/* ── Metrics ── */
 [data-testid="metric-container"] {
-    background: linear-gradient(135deg,#1e2130,#252840);
-    border: 1px solid rgba(99,102,241,0.2);
-    border-radius: 12px;
+    background: rgba(6,182,212,0.07) !important;
+    backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(6,182,212,0.2) !important;
+    border-radius: 12px !important;
     padding: 16px !important;
 }
-[data-testid="metric-container"] label { color: #94a3b8 !important; font-size: 0.8rem !important; }
-[data-testid="metric-container"] [data-testid="stMetricValue"] { color: #f1f5f9 !important; }
+[data-testid="metric-container"] label {
+    color: #7dd3fc !important;
+    font-size: 0.78rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+}
+[data-testid="metric-container"] [data-testid="stMetricValue"] {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+}
 
 /* ── Buttons ── */
 .stButton > button {
-    background: linear-gradient(135deg,#6366f1,#8b5cf6) !important;
-    border: none !important;
+    background: linear-gradient(135deg, #0369a1, #0ea5e9) !important;
+    border: 1px solid rgba(6,182,212,0.4) !important;
     border-radius: 10px !important;
     color: white !important;
     font-weight: 600 !important;
-    transition: all 0.2s !important;
-    box-shadow: 0 4px 15px rgba(99,102,241,0.3) !important;
+    transition: all 0.25s !important;
+    box-shadow: 0 4px 15px rgba(6,182,212,0.25) !important;
+    backdrop-filter: blur(8px) !important;
 }
 .stButton > button:hover {
-    transform: translateY(-1px) !important;
-    box-shadow: 0 6px 20px rgba(99,102,241,0.45) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 25px rgba(6,182,212,0.4) !important;
+    border-color: rgba(6,182,212,0.6) !important;
 }
 
-/* ── Inputs ── */
-.stSelectbox > div > div,
-.stSlider > div,
-.stFileUploader > div {
-    background: rgba(30,33,48,0.8) !important;
-    border: 1px solid rgba(99,102,241,0.2) !important;
+/* ── Selectbox & Inputs ── */
+.stSelectbox > div > div {
+    background: rgba(6,182,212,0.07) !important;
+    border: 1px solid rgba(6,182,212,0.25) !important;
     border-radius: 10px !important;
-    color: #e2e8f0 !important;
+    color: #e0f2fe !important;
+    backdrop-filter: blur(8px) !important;
+}
+.stSlider > div { color: #7dd3fc !important; }
+
+/* ── Dataframe ── */
+[data-testid="stDataFrame"] {
+    background: rgba(6,182,212,0.04) !important;
+    border: 1px solid rgba(6,182,212,0.15) !important;
+    border-radius: 12px !important;
+    overflow: hidden;
 }
 
-/* ── Plotly charts dark bg ── */
-.js-plotly-plot { background: transparent !important; }
+/* ── Alerts ── */
+[data-testid="stAlert"] {
+    background: rgba(6,182,212,0.08) !important;
+    border: 1px solid rgba(6,182,212,0.25) !important;
+    border-radius: 10px !important;
+    backdrop-filter: blur(8px) !important;
+    color: #e0f2fe !important;
+}
 
-/* ── Scrollbar ── */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #0f1117; }
-::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 3px; }
+/* ── Scrollbar Ocean ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: rgba(2,11,24,0.8); }
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #06b6d4, #0ea5e9);
+    border-radius: 3px;
+}
 
-/* ── Success/Error/Info ── */
-.stSuccess { background:rgba(16,185,129,0.1)!important; border-left:3px solid #10b981!important; }
-.stError   { background:rgba(239,68,68,0.1)!important;  border-left:3px solid #ef4444!important; }
-.stInfo    { background:rgba(99,102,241,0.1)!important; border-left:3px solid #6366f1!important; }
-.stWarning { background:rgba(245,158,11,0.1)!important; border-left:3px solid #f59e0b!important; }
+/* ── Plotly transparent ── */
+.js-plotly-plot .plotly { background: transparent !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -317,15 +372,15 @@ html, body, [class*="css"] {
 CHART_LAYOUT = dict(
     paper_bgcolor='rgba(0,0,0,0)',
     plot_bgcolor='rgba(0,0,0,0)',
-    font=dict(family='Inter', color='#94a3b8', size=12),
-    xaxis=dict(gridcolor='rgba(99,102,241,0.1)', linecolor='rgba(99,102,241,0.2)',
+    font=dict(family='Inter', color='#7dd3fc', size=12),
+    xaxis=dict(gridcolor='rgba(6,182,212,0.1)', linecolor='rgba(6,182,212,0.2)',
                tickfont=dict(color='#64748b')),
-    yaxis=dict(gridcolor='rgba(99,102,241,0.1)', linecolor='rgba(99,102,241,0.2)',
+    yaxis=dict(gridcolor='rgba(6,182,212,0.1)', linecolor='rgba(6,182,212,0.2)',
                tickfont=dict(color='#64748b')),
-    legend=dict(bgcolor='rgba(0,0,0,0)', font=dict(color='#94a3b8')),
+    legend=dict(bgcolor='rgba(0,0,0,0)', font=dict(color='#7dd3fc')),
     margin=dict(l=10, r=10, t=30, b=10),
 )
-COLORS = ['#6366f1','#06b6d4','#10b981','#f59e0b','#ec4899','#8b5cf6','#3b82f6','#ef4444']
+COLORS = ['#06b6d4','#0ea5e9','#38bdf8','#10b981','#f59e0b','#7dd3fc','#3b82f6','#a5f3fc']
 
 # ── SESSION STATE ────────────────────────────────────────────────────────────
 for key in ['df','preprocessor','analyzer','forecaster','segmenter',
@@ -484,8 +539,8 @@ def render_overview():
         fig.add_trace(go.Scatter(
             x=daily['date'], y=daily['revenue'],
             fill='tozeroy', mode='lines',
-            line=dict(color='#6366f1', width=2),
-            fillcolor='rgba(99,102,241,0.1)',
+            line=dict(color='#06b6d4', width=2),
+            fillcolor='rgba(6,182,212,0.1)',
             name='Revenue'
         ))
         apply_chart_theme(fig)
@@ -502,7 +557,7 @@ def render_overview():
                 orientation='h',
                 marker=dict(
                     color=top['revenue'],
-                    colorscale=[[0,'#4338ca'],[0.5,'#6366f1'],[1,'#06b6d4']]
+                    colorscale=[[0,'#0c4a6e'],[0.5,'#0369a1'],[1,'#38bdf8']]
                 )
             ))
             fig.update_layout(yaxis=dict(autorange='reversed'))
@@ -624,7 +679,7 @@ def render_forecasting():
                 fig.add_trace(go.Scatter(
                     x=fc_df['date'], y=fc_df['forecast'],
                     mode='lines', name='Forecast',
-                    line=dict(color='#06b6d4', width=2, dash='dash')
+                    line=dict(color='#38bdf8', width=2, dash='dash')
                 ))
             apply_chart_theme(fig)
             st.plotly_chart(fig, width='stretch')
@@ -643,7 +698,7 @@ def render_forecasting():
                         x=top_imp['importance'], y=top_imp['feature'],
                         orientation='h',
                         marker=dict(color=top_imp['importance'],
-                                    colorscale=[[0,'#4338ca'],[1,'#06b6d4']])
+                                    colorscale=[[0,'#0c4a6e'],[1,'#38bdf8']])
                     ))
                     fig.update_layout(yaxis=dict(autorange='reversed'))
                     apply_chart_theme(fig)
@@ -778,7 +833,7 @@ def render_anomaly():
             fig = go.Figure()
             fig.add_trace(go.Scatter(
                 x=normal['date'], y=normal['revenue'], mode='markers',
-                name='Normal', marker=dict(color='#6366f1', size=5, opacity=0.5)
+                name='Normal', marker=dict(color='#0ea5e9', size=5, opacity=0.6)
             ))
             fig.add_trace(go.Scatter(
                 x=anomalies['date'], y=anomalies['revenue'], mode='markers',
@@ -843,7 +898,7 @@ def render_comparison():
                 fig = go.Figure(go.Bar(
                     x=rmse_data.index, y=rmse_data.values,
                     marker=dict(color=rmse_data.values,
-                                colorscale=[[0,'#10b981'],[0.5,'#f59e0b'],[1,'#ef4444']])
+                                colorscale=[[0,'#06b6d4'],[0.5,'#f59e0b'],[1,'#ef4444']])
                 ))
                 apply_chart_theme(fig)
                 st.plotly_chart(fig, width='stretch')
@@ -857,7 +912,7 @@ def render_comparison():
                     fig = go.Figure(go.Bar(
                         x=r2_data.index, y=r2_data.values,
                         marker=dict(color=r2_data.values,
-                                    colorscale=[[0,'#ef4444'],[0.5,'#f59e0b'],[1,'#10b981']])
+                                    colorscale=[[0,'#ef4444'],[0.5,'#f59e0b'],[1,'#06b6d4']])
                     ))
                     apply_chart_theme(fig)
                     st.plotly_chart(fig, width='stretch')
