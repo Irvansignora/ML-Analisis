@@ -44,7 +44,9 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 #MainMenu { visibility: hidden !important; }
 footer { visibility: hidden !important; }
 [data-testid="stDecoration"] { display: none !important; }
-[data-testid="stToolbar"] { visibility: hidden !important; }
+[data-testid="stToolbar"] { display: none !important; }
+
+/* Jangan pernah override sidebar collapse controls - biarkan Streamlit yang handle */
 
 /* Header tetap ada - jangan di-hide */
 header[data-testid="stHeader"] {
@@ -53,8 +55,6 @@ header[data-testid="stHeader"] {
     border-bottom: 1px solid rgba(6,182,212,0.1) !important;
 }
 
-/* Sidebar selalu bisa muncul */
-section[data-testid="stSidebar"] { display: block !important; }
 
 .main .block-container { padding-top: 4rem !important; padding-bottom: 1rem !important; max-width: 100% !important; }
 
