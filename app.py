@@ -45,17 +45,32 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 footer { visibility: hidden !important; }
 [data-testid="stDecoration"] { display: none !important; }
 
-/* Header transparan tapi TETAP ADA — supaya tombol sidebar toggle muncul */
+/* Header tetap ada agar tombol sidebar toggle tidak hilang */
 header[data-testid="stHeader"] {
-    background: rgba(2,11,24,0.95) !important;
+    background: rgba(2,11,24,0.92) !important;
+    backdrop-filter: blur(12px) !important;
     border-bottom: 1px solid rgba(6,182,212,0.12) !important;
-    backdrop-filter: blur(10px) !important;
 }
-/* Sembunyikan deploy/share button, biarkan sidebar toggle */
-[data-testid="stToolbar"] { visibility: hidden !important; }
-[data-testid="stStatusWidget"] { visibility: hidden !important; }
-
-.main .block-container { padding-top: 5rem !important; padding-bottom: 1rem !important; max-width: 100% !important; }
+/* Sembunyikan toolbar kanan tapi biarkan tombol sidebar */
+[data-testid="stToolbar"] { display: none !important; }
+[data-testid="stStatusWidget"] { display: none !important; }
+/* Tombol collapse sidebar - pastikan visible */
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: all !important;
+    z-index: 9999 !important;
+}
+[data-testid="stSidebarCollapsedControl"] button,
+[data-testid="collapsedControl"] button {
+    background: rgba(6,182,212,0.15) !important;
+    border: 1px solid rgba(6,182,212,0.4) !important;
+    border-radius: 8px !important;
+    color: #7dd3fc !important;
+}
+.main .block-container { padding-top: 4.5rem !important; padding-bottom: 1rem !important; max-width: 100% !important; }
 
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, rgba(2,11,24,0.97) 0%, rgba(3,20,46,0.98) 100%) !important;
@@ -163,10 +178,13 @@ header[data-testid="stHeader"] {
     background: rgba(2,11,24,0.7); backdrop-filter: blur(12px);
     border-radius: 12px; padding: 4px; gap: 3px;
     border: 1px solid rgba(6,182,212,0.15);
+    width: 100% !important;
+    flex-wrap: nowrap !important;
 }
 .stTabs [data-baseweb="tab"] {
     border-radius: 8px !important; color: #7dd3fc !important;
     font-weight: 500 !important; padding: 7px 16px !important; border: none !important;
+    flex: 1 !important; text-align: center !important;
 }
 .stTabs [aria-selected="true"] {
     background: linear-gradient(135deg, #0369a1, #0ea5e9) !important;
@@ -179,18 +197,12 @@ header[data-testid="stHeader"] {
 }
 [data-testid="stFileUploaderDropzoneInstructions"] div span { color: #7dd3fc !important; font-weight: 500 !important; }
 [data-testid="stFileUploaderDropzoneInstructions"] div small { color: #64748b !important; }
-/* Browse files button - teks putih */
 [data-testid="stFileUploaderDropzone"] button {
-    background: rgba(6,182,212,0.12) !important;
-    border: 1px solid rgba(6,182,212,0.4) !important;
+    background: rgba(6,182,212,0.15) !important;
+    border: 1px solid rgba(6,182,212,0.5) !important;
     border-radius: 8px !important;
     color: #ffffff !important;
     font-weight: 600 !important;
-    font-size: 0.85rem !important;
-}
-[data-testid="stFileUploaderDropzone"] button:hover {
-    background: rgba(6,182,212,0.25) !important;
-    color: #ffffff !important;
 }
 
 [data-testid="metric-container"] {
@@ -334,6 +346,7 @@ def render_sidebar():
             if 'date' in df.columns:
                 dmin, dmax = df['date'].min().date(), df['date'].max().date()
                 st.markdown(f'<div class="stat-badge">📅 {dmin} → {dmax}</div>', unsafe_allow_html=True)
+            # Filter info badge jika aktif
             if st.session_state.df_filtered is not None:
                 n = len(st.session_state.df_filtered)
                 st.markdown(f'<div class="stat-badge" style="border-color:rgba(245,158,11,0.4);color:#fbbf24">🔍 Filtered: {n:,}</div>', unsafe_allow_html=True)
@@ -1061,6 +1074,23 @@ def tab_reports():
 # ── MAIN ─────────────────────────────────────────────────────────────────────
 def main():
     render_sidebar()
+
+    # CSS tambahan untuk selectbox putih & tabs full width
+    st.markdown("""
+    <style>
+    /* Selectbox teks putih */
+    [data-testid="stSelectbox"] > div > div > div { color: #ffffff !important; font-weight: 600 !important; }
+    [data-testid="stSelectbox"] svg { fill: #7dd3fc !important; }
+    /* Filter expander */
+    [data-testid="stExpander"] {
+        background: rgba(6,182,212,0.05) !important;
+        border: 1px solid rgba(6,182,212,0.2) !important;
+        border-radius: 10px !important;
+    }
+    [data-testid="stExpander"] summary p { color: #7dd3fc !important; font-weight: 500 !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
     tabs = st.tabs([
         "📊 Dashboard",
         "🚨 Anomaly",
@@ -1073,43 +1103,7 @@ def main():
     with tabs[0]:
         df_raw = st.session_state.df
 
-        # CSS override untuk selectbox & filter di dalam dashboard
-        st.markdown("""
-        <style>
-        /* Selectbox teks putih */
-        [data-testid="stSelectbox"] > div > div {
-            background: rgba(6,182,212,0.1) !important;
-            border: 1px solid rgba(6,182,212,0.35) !important;
-            border-radius: 10px !important;
-        }
-        [data-testid="stSelectbox"] > div > div > div {
-            color: #ffffff !important;
-            font-weight: 600 !important;
-            font-size: 0.9rem !important;
-        }
-        [data-testid="stSelectbox"] svg { fill: #7dd3fc !important; }
-        /* Selectbox dropdown list */
-        [data-baseweb="select"] [role="listbox"] {
-            background: #03142e !important;
-            border: 1px solid rgba(6,182,212,0.3) !important;
-            border-radius: 10px !important;
-        }
-        [data-baseweb="select"] [role="option"] { color: #e0f2fe !important; }
-        [data-baseweb="select"] [aria-selected="true"] {
-            background: rgba(6,182,212,0.2) !important;
-            color: #fff !important;
-        }
-        /* Filter expander */
-        [data-testid="stExpander"] {
-            background: rgba(6,182,212,0.05) !important;
-            border: 1px solid rgba(6,182,212,0.2) !important;
-            border-radius: 10px !important;
-        }
-        [data-testid="stExpander"] summary p { color: #7dd3fc !important; font-weight: 500 !important; font-size: 0.85rem !important; }
-        </style>
-        """, unsafe_allow_html=True)
-
-        # ── Baris: Dropdown nav + Filter tombol (sejajar, full width) ──
+        # Baris nav + filter sejajar
         nav_col, filt_col = st.columns([4, 1])
 
         with nav_col:
@@ -1123,7 +1117,7 @@ def main():
 
         with filt_col:
             if df_raw is not None:
-                with st.expander("🔍 Filter Data"):
+                with st.expander("🔍 Filter"):
                     if 'date' in df_raw.columns:
                         d1, d2 = st.date_input("Tanggal",
                             value=[df_raw['date'].min().date(), df_raw['date'].max().date()],
@@ -1131,16 +1125,12 @@ def main():
                             key="dash_date")
                     else:
                         d1, d2 = None, None
-
                     cats = sorted(df_raw['category'].dropna().unique().tolist()) if 'category' in df_raw.columns else []
                     sel_cat = st.multiselect("Kategori", cats, placeholder="Semua", key="dash_cat")
-
                     regions = sorted(df_raw['region'].dropna().unique().tolist()) if 'region' in df_raw.columns else []
                     sel_reg = st.multiselect("Wilayah", regions, placeholder="Semua", key="dash_reg")
-
                     channels = sorted(df_raw['channel'].dropna().unique().tolist()) if 'channel' in df_raw.columns else []
                     sel_ch = st.multiselect("Channel", channels, placeholder="Semua", key="dash_ch")
-
                     b1, b2 = st.columns(2)
                     with b1:
                         if st.button("✅ Terapkan", use_container_width=True, key="btn_apply"):
