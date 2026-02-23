@@ -44,14 +44,18 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 #MainMenu { visibility: hidden !important; }
 footer { visibility: hidden !important; }
 [data-testid="stDecoration"] { display: none !important; }
-/* Biarkan header tetap ada (untuk tombol sidebar toggle), tapi buat transparan & minimal */
+
+/* Header transparan tapi TETAP ADA — supaya tombol sidebar toggle muncul */
 header[data-testid="stHeader"] {
-    background: transparent !important;
-    border-bottom: none !important;
+    background: rgba(2,11,24,0.95) !important;
+    border-bottom: 1px solid rgba(6,182,212,0.12) !important;
+    backdrop-filter: blur(10px) !important;
 }
-/* Sembunyikan toolbar kanan (deploy, share, dll) tapi biarkan tombol sidebar tetap ada */
+/* Sembunyikan deploy/share button, biarkan sidebar toggle */
 [data-testid="stToolbar"] { visibility: hidden !important; }
-.main .block-container { padding-top: 3rem !important; padding-bottom: 1rem !important; max-width: 100% !important; }
+[data-testid="stStatusWidget"] { visibility: hidden !important; }
+
+.main .block-container { padding-top: 5rem !important; padding-bottom: 1rem !important; max-width: 100% !important; }
 
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, rgba(2,11,24,0.97) 0%, rgba(3,20,46,0.98) 100%) !important;
@@ -175,6 +179,19 @@ header[data-testid="stHeader"] {
 }
 [data-testid="stFileUploaderDropzoneInstructions"] div span { color: #7dd3fc !important; font-weight: 500 !important; }
 [data-testid="stFileUploaderDropzoneInstructions"] div small { color: #64748b !important; }
+/* Browse files button - teks putih */
+[data-testid="stFileUploaderDropzone"] button {
+    background: rgba(6,182,212,0.12) !important;
+    border: 1px solid rgba(6,182,212,0.4) !important;
+    border-radius: 8px !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    font-size: 0.85rem !important;
+}
+[data-testid="stFileUploaderDropzone"] button:hover {
+    background: rgba(6,182,212,0.25) !important;
+    color: #ffffff !important;
+}
 
 [data-testid="metric-container"] {
     background: rgba(6,182,212,0.07) !important; backdrop-filter: blur(12px) !important;
@@ -318,7 +335,8 @@ def render_sidebar():
                 dmin, dmax = df['date'].min().date(), df['date'].max().date()
                 st.markdown(f'<div class="stat-badge">📅 {dmin} → {dmax}</div>', unsafe_allow_html=True)
             if st.session_state.df_filtered is not None:
-                st.markdown(f'<div class="stat-badge" style="border-color:rgba(245,158,11,0.4);color:#fbbf24">🔍 {len(st.session_state.df_filtered):,} filtered</div>', unsafe_allow_html=True)
+                n = len(st.session_state.df_filtered)
+                st.markdown(f'<div class="stat-badge" style="border-color:rgba(245,158,11,0.4);color:#fbbf24">🔍 Filtered: {n:,}</div>', unsafe_allow_html=True)
 
         st.markdown("---")
         st.markdown("##### ⚙️ Model Settings")
@@ -1055,49 +1073,57 @@ def main():
     with tabs[0]:
         df_raw = st.session_state.df
 
-        # ── Baris navigasi + filter dalam satu baris ──
+        # CSS override untuk selectbox & filter di dalam dashboard
         st.markdown("""
         <style>
-        /* Radio sub-nav styling */
-        div[data-testid="stRadio"] > div {
-            gap: 6px !important; flex-wrap: wrap !important;
+        /* Selectbox teks putih */
+        [data-testid="stSelectbox"] > div > div {
+            background: rgba(6,182,212,0.1) !important;
+            border: 1px solid rgba(6,182,212,0.35) !important;
+            border-radius: 10px !important;
         }
-        div[data-testid="stRadio"] > div > label {
-            background: rgba(6,182,212,0.08) !important;
-            border: 1px solid rgba(6,182,212,0.25) !important;
-            border-radius: 8px !important; padding: 6px 14px !important;
-            color: #7dd3fc !important; font-size: 0.85rem !important; font-weight: 500 !important;
-            cursor: pointer !important; transition: all 0.2s !important;
+        [data-testid="stSelectbox"] > div > div > div {
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            font-size: 0.9rem !important;
         }
-        div[data-testid="stRadio"] > div > label:hover {
+        [data-testid="stSelectbox"] svg { fill: #7dd3fc !important; }
+        /* Selectbox dropdown list */
+        [data-baseweb="select"] [role="listbox"] {
+            background: #03142e !important;
+            border: 1px solid rgba(6,182,212,0.3) !important;
+            border-radius: 10px !important;
+        }
+        [data-baseweb="select"] [role="option"] { color: #e0f2fe !important; }
+        [data-baseweb="select"] [aria-selected="true"] {
             background: rgba(6,182,212,0.2) !important;
-            border-color: rgba(6,182,212,0.5) !important;
+            color: #fff !important;
         }
-        /* Filter expander style */
+        /* Filter expander */
         [data-testid="stExpander"] {
             background: rgba(6,182,212,0.05) !important;
             border: 1px solid rgba(6,182,212,0.2) !important;
             border-radius: 10px !important;
         }
-        [data-testid="stExpander"] summary { color: #7dd3fc !important; font-size: 0.85rem !important; font-weight: 500 !important; }
+        [data-testid="stExpander"] summary p { color: #7dd3fc !important; font-weight: 500 !important; font-size: 0.85rem !important; }
         </style>
         """, unsafe_allow_html=True)
 
-        nav_col, filter_col = st.columns([3, 1])
+        # ── Baris: Dropdown nav + Filter tombol (sejajar, full width) ──
+        nav_col, filt_col = st.columns([4, 1])
 
         with nav_col:
-            dashboard_view = st.radio(
+            dashboard_view = st.selectbox(
                 "view",
                 ["📊 KPI Overview", "📈 Sales Performance", "💰 Profitability",
                  "👥 Customer & RFM", "📍 Regional", "🎯 Category & Pareto"],
-                horizontal=True,
                 label_visibility="collapsed",
                 key="dashboard_view"
             )
 
-        with filter_col:
+        with filt_col:
             if df_raw is not None:
-                with st.expander("🔍 Filter", expanded=False):
+                with st.expander("🔍 Filter Data"):
                     if 'date' in df_raw.columns:
                         d1, d2 = st.date_input("Tanggal",
                             value=[df_raw['date'].min().date(), df_raw['date'].max().date()],
@@ -1136,9 +1162,9 @@ def main():
                             st.session_state.analyzer    = SalesAnalyzer(df_raw)
                             st.rerun()
 
-        st.markdown('<hr style="border:none;border-top:1px solid rgba(6,182,212,0.15);margin:8px 0 16px 0">', unsafe_allow_html=True)
+        st.markdown('<hr style="border:none;border-top:1px solid rgba(6,182,212,0.15);margin:6px 0 14px 0">', unsafe_allow_html=True)
 
-        if dashboard_view == "📊 KPI Overview":      tab_kpi()
+        if dashboard_view == "📊 KPI Overview":       tab_kpi()
         elif dashboard_view == "📈 Sales Performance": tab_sales()
         elif dashboard_view == "💰 Profitability":     tab_profit()
         elif dashboard_view == "👥 Customer & RFM":    tab_customer()
