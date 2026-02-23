@@ -325,11 +325,16 @@ class SalesAnalyzer:
             insights.append(f"Kategori terbesar: {top_category} ({cat_pct:.1f}% dari total revenue)")
         
         # Weekend vs weekday
-        if 'day_of_week' in self.df.columns and 'revenue' in self.df.columns:
-            weekend_revenue = self.df[self.df['date'].dt.dayofweek >= 5]['revenue'].mean()
-            weekday_revenue = self.df[self.df['date'].dt.dayofweek < 5]['revenue'].mean()
-            if weekend_revenue > weekday_revenue:
-                insights.append(f"Weekend revenue lebih tinggi {((weekend_revenue/weekday_revenue-1)*100):.1f}% dari weekday")
+        if 'date' in self.df.columns and 'revenue' in self.df.columns:
+            weekend_data = self.df[self.df['date'].dt.dayofweek >= 5]['revenue']
+            weekday_data = self.df[self.df['date'].dt.dayofweek < 5]['revenue']
+            # BUG FIX: guard against empty slice yang menyebabkan RuntimeWarning: Mean of empty slice
+            if not weekend_data.empty and not weekday_data.empty:
+                weekend_revenue = weekend_data.mean()
+                weekday_revenue = weekday_data.mean()
+                if pd.notna(weekend_revenue) and pd.notna(weekday_revenue) and weekday_revenue > 0:
+                    if weekend_revenue > weekday_revenue:
+                        insights.append(f"Weekend revenue lebih tinggi {((weekend_revenue/weekday_revenue-1)*100):.1f}% dari weekday")
         
         return insights
 
