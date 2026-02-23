@@ -53,7 +53,7 @@ header[data-testid="stHeader"] {
     border-bottom: 1px solid rgba(6,182,212,0.1) !important;
 }
 
-/* Sidebar selalu bisa muncul - jangan hide */
+/* Sidebar selalu bisa muncul */
 section[data-testid="stSidebar"] { display: block !important; }
 
 .main .block-container { padding-top: 4rem !important; padding-bottom: 1rem !important; max-width: 100% !important; }
@@ -130,10 +130,7 @@ section[data-testid="stSidebar"] { display: block !important; }
 }
 .insight-card::before { content: '💡'; font-size: 0.95rem; flex-shrink: 0; }
 
-.section-divider {
-    border: none; border-top: 1px solid rgba(6,182,212,0.12);
-    margin: 24px 0;
-}
+.section-divider { border: none; border-top: 1px solid rgba(6,182,212,0.12); margin: 24px 0; }
 .section-header {
     font-size: 1.15rem; font-weight: 700; color: #38bdf8;
     margin: 28px 0 16px 0; display: flex; align-items: center; gap: 10px;
@@ -182,7 +179,6 @@ section[data-testid="stSidebar"] { display: block !important; }
 }
 [data-testid="stFileUploaderDropzoneInstructions"] div span { color: #7dd3fc !important; font-weight: 500 !important; }
 [data-testid="stFileUploaderDropzoneInstructions"] div small { color: #64748b !important; }
-[data-testid="stFileUploaderDropzone"] button { background: rgba(6,182,212,0.15) !important; border: 1px solid rgba(6,182,212,0.5) !important; border-radius: 8px !important; color: #ffffff !important; font-weight: 600 !important; }
 [data-testid="stFileUploaderDropzone"] button {
     background: rgba(6,182,212,0.15) !important;
     border: 1px solid rgba(6,182,212,0.5) !important;
@@ -389,16 +385,13 @@ def tab_kpi():
     txn = len(df)
     aov = rev / txn if txn else 0
 
-    # Estimate profit (pakai margin 30% jika tidak ada cost)
-    has_cost = 'cost' in df.columns or 'hpp' in df.columns
     cost_col = 'cost' if 'cost' in df.columns else ('hpp' if 'hpp' in df.columns else None)
     if cost_col:
         gross_profit = rev - df[cost_col].sum()
     else:
-        gross_profit = rev * 0.30  # estimasi 30% margin
+        gross_profit = rev * 0.30
     margin_pct = (gross_profit / rev * 100) if rev else 0
 
-    # MoM Growth
     mom, yoy = None, None
     if 'date' in df.columns and 'revenue' in df.columns:
         monthly = df.groupby(df['date'].dt.to_period('M'))['revenue'].sum()
@@ -407,7 +400,6 @@ def tab_kpi():
         if len(monthly) >= 13:
             yoy = ((monthly.iloc[-1] - monthly.iloc[-13]) / monthly.iloc[-13] * 100) if monthly.iloc[-13] else 0
 
-    # ── ROW 1: 4 KPI ──
     c1,c2,c3,c4 = st.columns(4)
     with c1: kpi('c1','💰', format_currency(rev), 'Total Revenue',
                  f"{mom:.1f}% vs bln lalu" if mom is not None else None, mom >= 0 if mom else True)
@@ -417,7 +409,6 @@ def tab_kpi():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── ROW 2: 4 KPI ──
     c5,c6,c7,c8 = st.columns(4)
     with c5: kpi('c5','💎', format_currency(gross_profit), 'Gross Profit',
                  "Estimasi 30%" if not cost_col else None, True)
@@ -430,25 +421,19 @@ def tab_kpi():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Revenue Trend ──
     section("📈 Tren Penjualan")
     if 'date' in df.columns:
         freq_opt = st.radio("Granularitas", ["Harian","Mingguan","Bulanan"], horizontal=True, label_visibility='collapsed')
         freq_map = {"Harian":"D","Mingguan":"W","Bulanan":"M"}
         freq = freq_map[freq_opt]
-
         daily = df.groupby(df['date'].dt.to_period(freq))['revenue'].sum().reset_index()
         daily['date'] = daily['date'].dt.to_timestamp()
         daily['ma7']  = daily['revenue'].rolling(7, min_periods=1).mean()
-
         fig = go.Figure()
-        fig.add_trace(go.Bar(x=daily['date'], y=daily['revenue'], name='Revenue',
-                             marker_color='rgba(6,182,212,0.6)'))
-        fig.add_trace(go.Scatter(x=daily['date'], y=daily['ma7'], name='Moving Avg',
-                                 line=dict(color='#f59e0b', width=2), mode='lines'))
+        fig.add_trace(go.Bar(x=daily['date'], y=daily['revenue'], name='Revenue', marker_color='rgba(6,182,212,0.6)'))
+        fig.add_trace(go.Scatter(x=daily['date'], y=daily['ma7'], name='Moving Avg', line=dict(color='#f59e0b', width=2), mode='lines'))
         ct(fig); st.plotly_chart(fig, width='stretch')
 
-    # ── Key Insights ──
     section("💡 Key Insights")
     insights = SalesAnalyzer(df).generate_insights()
     cols = st.columns(2)
@@ -463,7 +448,6 @@ def tab_sales():
     if df is None: return empty("📊","Belum ada data")
     if 'revenue' not in df.columns: return empty("⚠️","Kolom revenue tidak ditemukan")
 
-    # ── Top & Bottom Products ──
     section("🔝 Top & Bottom Produk")
     if 'product' in df.columns:
         prod = df.groupby('product').agg(
@@ -477,47 +461,38 @@ def tab_sales():
             st.markdown('<div class="glass-card"><p class="card-title">🏆 Top 10 by Revenue</p>', unsafe_allow_html=True)
             top10 = prod.head(10)
             fig = go.Figure(go.Bar(x=top10['revenue'], y=top10['product'], orientation='h',
-                                   marker=dict(color=top10['revenue'],
-                                               colorscale=[[0,'#0c4a6e'],[1,'#38bdf8']])))
+                                   marker=dict(color=top10['revenue'], colorscale=[[0,'#0c4a6e'],[1,'#38bdf8']])))
             fig.update_layout(yaxis=dict(autorange='reversed'))
             ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown('</div>', unsafe_allow_html=True)
-
         with c2:
             st.markdown('<div class="glass-card"><p class="card-title">🔻 Bottom 10 (Perlu Perhatian)</p>', unsafe_allow_html=True)
             bot10 = prod.tail(10).sort_values('revenue')
             fig = go.Figure(go.Bar(x=bot10['revenue'], y=bot10['product'], orientation='h',
-                                   marker=dict(color=bot10['revenue'],
-                                               colorscale=[[0,'#ef4444'],[1,'#f97316']])))
+                                   marker=dict(color=bot10['revenue'], colorscale=[[0,'#ef4444'],[1,'#f97316']])))
             fig.update_layout(yaxis=dict(autorange='reversed'))
             ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # Top by Qty
         if 'quantity' in df.columns:
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown('<div class="glass-card"><p class="card-title">📦 Top 10 by Quantity</p>', unsafe_allow_html=True)
                 top_qty = prod.sort_values('qty', ascending=False).head(10)
-                fig = go.Figure(go.Bar(x=top_qty['qty'], y=top_qty['product'], orientation='h',
-                                       marker_color='rgba(16,185,129,0.7)'))
+                fig = go.Figure(go.Bar(x=top_qty['qty'], y=top_qty['product'], orientation='h', marker_color='rgba(16,185,129,0.7)'))
                 fig.update_layout(yaxis=dict(autorange='reversed'))
                 ct(fig); st.plotly_chart(fig, width='stretch')
                 st.markdown('</div>', unsafe_allow_html=True)
-
             with c2:
                 st.markdown('<div class="glass-card"><p class="card-title">🔄 Revenue vs Quantity Scatter</p>', unsafe_allow_html=True)
                 fig = px.scatter(prod.head(30), x='qty', y='revenue', text='product',
-                                 color='revenue', color_continuous_scale='Blues',
-                                 size='revenue', size_max=30)
+                                 color='revenue', color_continuous_scale='Blues', size='revenue', size_max=30)
                 fig.update_traces(textposition='top center', textfont=dict(color='#7dd3fc', size=9))
                 ct(fig); st.plotly_chart(fig, width='stretch')
                 st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Top Salesperson ──
     section("👤 Top Salesperson")
-    sales_col = next((c for c in ['salesperson','sales_person','sales','nama_sales',
-                                   'sales_name','agen','agent','pic'] if c in df.columns), None)
+    sales_col = next((c for c in ['salesperson','sales_person','sales','nama_sales','sales_name','agen','agent','pic'] if c in df.columns), None)
     if sales_col:
         sp = df.groupby(sales_col).agg(revenue=('revenue','sum'), txn=('revenue','count')).reset_index()
         sp = sp.sort_values('revenue', ascending=False).head(15)
@@ -525,8 +500,7 @@ def tab_sales():
         with c1:
             st.markdown('<div class="glass-card"><p class="card-title">🏅 Top Salesperson by Revenue</p>', unsafe_allow_html=True)
             fig = go.Figure(go.Bar(x=sp['revenue'], y=sp[sales_col], orientation='h',
-                                   marker=dict(color=sp['revenue'],
-                                               colorscale=[[0,'#0c4a6e'],[1,'#06b6d4']])))
+                                   marker=dict(color=sp['revenue'], colorscale=[[0,'#0c4a6e'],[1,'#06b6d4']])))
             fig.update_layout(yaxis=dict(autorange='reversed'))
             ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown('</div>', unsafe_allow_html=True)
@@ -537,7 +511,6 @@ def tab_sales():
                          use_container_width=True, height=280)
             st.markdown('</div>', unsafe_allow_html=True)
     else:
-        # Gunakan channel/region sebagai proxy
         proxy = next((c for c in ['channel','store','courier'] if c in df.columns), None)
         if proxy:
             section(f"📡 Performa per {proxy.title()}")
@@ -545,15 +518,13 @@ def tab_sales():
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown('<div class="glass-card"><p class="card-title">📊 Revenue per Channel/Toko</p>', unsafe_allow_html=True)
-                fig = go.Figure(go.Bar(x=sp['revenue'], y=sp[proxy], orientation='h',
-                                       marker=dict(color=COLORS[:len(sp)])))
+                fig = go.Figure(go.Bar(x=sp['revenue'], y=sp[proxy], orientation='h', marker=dict(color=COLORS[:len(sp)])))
                 fig.update_layout(yaxis=dict(autorange='reversed'))
                 ct(fig); st.plotly_chart(fig, width='stretch')
                 st.markdown('</div>', unsafe_allow_html=True)
             with c2:
                 st.markdown('<div class="glass-card"><p class="card-title">🥧 Distribusi Revenue</p>', unsafe_allow_html=True)
-                fig = go.Figure(go.Pie(labels=sp[proxy], values=sp['revenue'], hole=0.5,
-                                       marker=dict(colors=COLORS)))
+                fig = go.Figure(go.Pie(labels=sp[proxy], values=sp['revenue'], hole=0.5, marker=dict(colors=COLORS)))
                 ct(fig); st.plotly_chart(fig, width='stretch')
                 st.markdown('</div>', unsafe_allow_html=True)
         else:
@@ -566,7 +537,6 @@ def tab_profit():
     if df is None: return empty("💰","Belum ada data")
     if 'revenue' not in df.columns: return empty("⚠️","Kolom revenue tidak ditemukan")
 
-    # Estimate profit
     cost_col = next((c for c in ['cost','hpp','harga_pokok','cogs'] if c in df.columns), None)
     df2 = df.copy()
     if cost_col:
@@ -574,10 +544,8 @@ def tab_profit():
         df2['margin'] = df2['profit'] / df2['revenue'] * 100
         st.info(f"✅ Menggunakan kolom **{cost_col}** untuk kalkulasi profit")
     else:
-        # Estimasi margin per produk bervariasi (lebih realistis) berdasarkan hash nama produk
         st.warning("⚠️ Kolom HPP/Cost tidak ditemukan. Margin diestimasi per produk (15–45%).")
         if 'product' in df2.columns:
-            # Seed margin per produk agar konsisten tapi bervariasi
             np.random.seed(42)
             products = df2['product'].unique()
             margin_map = {p: np.random.uniform(0.15, 0.45) for p in products}
@@ -587,7 +555,6 @@ def tab_profit():
         df2['profit'] = df2['revenue'] * df2['margin_rate']
         df2['margin'] = df2['margin_rate'] * 100
 
-    # ── Summary ──
     total_rev  = df2['revenue'].sum()
     total_prof = df2['profit'].sum()
     avg_margin = df2['margin'].mean()
@@ -601,9 +568,7 @@ def tab_profit():
 
     if 'product' in df2.columns:
         prod_p = df2.groupby('product').agg(
-            revenue=('revenue','sum'),
-            profit=('profit','sum'),
-            txn=('revenue','count')
+            revenue=('revenue','sum'), profit=('profit','sum'), txn=('revenue','count')
         ).reset_index()
         prod_p['margin_pct'] = prod_p['profit'] / prod_p['revenue'] * 100
 
@@ -613,24 +578,19 @@ def tab_profit():
             st.markdown('<div class="glass-card"><p class="card-title">🏆 Top 10 Produk by Margin %</p>', unsafe_allow_html=True)
             top_m = prod_p.sort_values('margin_pct', ascending=False).head(10)
             fig = go.Figure(go.Bar(x=top_m['margin_pct'], y=top_m['product'], orientation='h',
-                                   marker=dict(color=top_m['margin_pct'],
-                                               colorscale=[[0,'#064e3b'],[1,'#10b981']])))
-            fig.update_layout(yaxis=dict(autorange='reversed'),
-                              xaxis=dict(ticksuffix='%'))
+                                   marker=dict(color=top_m['margin_pct'], colorscale=[[0,'#064e3b'],[1,'#10b981']])))
+            fig.update_layout(yaxis=dict(autorange='reversed'), xaxis=dict(ticksuffix='%'))
             ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown('</div>', unsafe_allow_html=True)
-
         with c2:
             st.markdown('<div class="glass-card"><p class="card-title">💸 Produk Margin Terendah (Rugi?)</p>', unsafe_allow_html=True)
             bot_m = prod_p.sort_values('margin_pct').head(10)
             colors_bar = ['#ef4444' if x < 0 else '#f97316' if x < 10 else '#f59e0b' for x in bot_m['margin_pct']]
-            fig = go.Figure(go.Bar(x=bot_m['margin_pct'], y=bot_m['product'], orientation='h',
-                                   marker_color=colors_bar))
+            fig = go.Figure(go.Bar(x=bot_m['margin_pct'], y=bot_m['product'], orientation='h', marker_color=colors_bar))
             fig.update_layout(yaxis=dict(autorange='reversed'), xaxis=dict(ticksuffix='%'))
             ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # Revenue vs Profit scatter
         section("🔍 Revenue vs Profit Analysis")
         st.markdown('<div class="glass-card"><p class="card-title">⚡ Scatter: Revenue vs Profit (ukuran = transaksi)</p>', unsafe_allow_html=True)
         fig = px.scatter(prod_p, x='revenue', y='profit', size='txn', text='product',
@@ -642,16 +602,14 @@ def tab_profit():
         ct(fig); st.plotly_chart(fig, width='stretch')
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Table
         st.markdown('<div class="glass-card"><p class="card-title">📋 Detail Profitabilitas per Produk</p>', unsafe_allow_html=True)
         tbl = prod_p.copy()
-        tbl['Revenue']    = tbl['revenue'].apply(format_currency)
-        tbl['Profit']     = tbl['profit'].apply(format_currency)
-        tbl['Margin %']   = tbl['margin_pct'].apply(lambda x: f"{x:.1f}%")
-        tbl['Transaksi']  = tbl['txn']
+        tbl['Revenue']   = tbl['revenue'].apply(format_currency)
+        tbl['Profit']    = tbl['profit'].apply(format_currency)
+        tbl['Margin %']  = tbl['margin_pct'].apply(lambda x: f"{x:.1f}%")
+        tbl['Transaksi'] = tbl['txn']
         st.dataframe(tbl[['product','Revenue','Profit','Margin %','Transaksi']]
-                     .rename(columns={'product':'Produk'})
-                     .sort_values('Margin %', ascending=False),
+                     .rename(columns={'product':'Produk'}).sort_values('Margin %', ascending=False),
                      use_container_width=True, height=300)
         st.markdown(dl(prod_p, 'profitability.csv', 'Download CSV'), unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -666,7 +624,6 @@ def tab_customer():
     if not cust_col:
         return empty("👥","Kolom customer tidak ditemukan","Pastikan ada kolom: customer, pelanggan, buyer, dll")
 
-    # ── RFM Analysis ──
     section("🎯 RFM Analysis")
     if 'date' in df.columns and 'revenue' in df.columns:
         today = df['date'].max()
@@ -676,15 +633,12 @@ def tab_customer():
             monetary =('revenue', 'sum')
         ).reset_index()
 
-        # Score 1-5
         for col, asc in [('recency', True), ('frequency', False), ('monetary', False)]:
             try:
                 rfm[f'{col}_score'] = pd.qcut(rfm[col], q=5, labels=[5,4,3,2,1] if asc else [1,2,3,4,5], duplicates='drop')
             except: rfm[f'{col}_score'] = 3
 
-        rfm['rfm_score'] = (rfm['recency_score'].astype(int) +
-                            rfm['frequency_score'].astype(int) +
-                            rfm['monetary_score'].astype(int))
+        rfm['rfm_score'] = (rfm['recency_score'].astype(int) + rfm['frequency_score'].astype(int) + rfm['monetary_score'].astype(int))
 
         def segment(s):
             if s >= 13: return '⭐ Champions'
@@ -692,23 +646,19 @@ def tab_customer():
             elif s >= 7:  return '🌱 Potential'
             elif s >= 4:  return '😴 At Risk'
             else:          return '💀 Lost'
-
         rfm['segment'] = rfm['rfm_score'].apply(segment)
 
         c1, c2 = st.columns(2)
         with c1:
             st.markdown('<div class="glass-card"><p class="card-title">🎯 Distribusi Segmen RFM</p>', unsafe_allow_html=True)
             seg_count = rfm['segment'].value_counts()
-            fig = go.Figure(go.Pie(labels=seg_count.index, values=seg_count.values,
-                                   hole=0.5, marker=dict(colors=COLORS)))
+            fig = go.Figure(go.Pie(labels=seg_count.index, values=seg_count.values, hole=0.5, marker=dict(colors=COLORS)))
             ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown('</div>', unsafe_allow_html=True)
-
         with c2:
             st.markdown('<div class="glass-card"><p class="card-title">💰 Monetary per Segmen</p>', unsafe_allow_html=True)
             seg_mon = rfm.groupby('segment')['monetary'].sum().reset_index().sort_values('monetary', ascending=False)
-            fig = go.Figure(go.Bar(x=seg_mon['segment'], y=seg_mon['monetary'],
-                                   marker=dict(color=COLORS[:len(seg_mon)])))
+            fig = go.Figure(go.Bar(x=seg_mon['segment'], y=seg_mon['monetary'], marker=dict(color=COLORS[:len(seg_mon)])))
             ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -718,17 +668,14 @@ def tab_customer():
             st.markdown('<div class="glass-card"><p class="card-title">💎 Top 15 Customer by Revenue (CLV)</p>', unsafe_allow_html=True)
             top_c = rfm.sort_values('monetary', ascending=False).head(15)
             fig = go.Figure(go.Bar(x=top_c['monetary'], y=top_c[cust_col], orientation='h',
-                                   marker=dict(color=top_c['monetary'],
-                                               colorscale=[[0,'#0c4a6e'],[1,'#06b6d4']])))
+                                   marker=dict(color=top_c['monetary'], colorscale=[[0,'#0c4a6e'],[1,'#06b6d4']])))
             fig.update_layout(yaxis=dict(autorange='reversed'))
             ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown('</div>', unsafe_allow_html=True)
-
         with c2:
             st.markdown('<div class="glass-card"><p class="card-title">🔁 Top 15 Repeat Customer (Frequency)</p>', unsafe_allow_html=True)
             top_f = rfm.sort_values('frequency', ascending=False).head(15)
-            fig = go.Figure(go.Bar(x=top_f['frequency'], y=top_f[cust_col], orientation='h',
-                                   marker_color='rgba(16,185,129,0.7)'))
+            fig = go.Figure(go.Bar(x=top_f['frequency'], y=top_f[cust_col], orientation='h', marker_color='rgba(16,185,129,0.7)'))
             fig.update_layout(yaxis=dict(autorange='reversed'))
             ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown('</div>', unsafe_allow_html=True)
@@ -737,10 +684,8 @@ def tab_customer():
         rfm_show = rfm.copy()
         rfm_show['monetary'] = rfm_show['monetary'].apply(format_currency)
         st.dataframe(rfm_show[[cust_col,'segment','recency','frequency','monetary','rfm_score']]
-                     .rename(columns={cust_col:'Customer','recency':'Recency (hari)',
-                                      'frequency':'Frequency','monetary':'Monetary','rfm_score':'Score'})
-                     .sort_values('Score', ascending=False),
-                     use_container_width=True, height=300)
+                     .rename(columns={cust_col:'Customer','recency':'Recency (hari)','frequency':'Frequency','monetary':'Monetary','rfm_score':'Score'})
+                     .sort_values('Score', ascending=False), use_container_width=True, height=300)
         st.markdown(dl(rfm, 'rfm_analysis.csv', 'Download RFM CSV'), unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -755,12 +700,10 @@ def tab_regional():
         return empty("📍","Kolom wilayah tidak ditemukan","Pastikan ada kolom: region, lokasi, kota, wilayah, dll")
 
     reg = df.groupby(region_col).agg(
-        revenue=('revenue','sum'),
-        txn=('revenue','count'),
+        revenue=('revenue','sum'), txn=('revenue','count'),
         qty=('quantity','sum') if 'quantity' in df.columns else ('revenue','count')
     ).reset_index().sort_values('revenue', ascending=False)
 
-    # KPI
     c1,c2,c3 = st.columns(3)
     with c1: kpi('c1','🗺️', str(reg[region_col].nunique()), 'Total Wilayah')
     with c2: kpi('c2','🏆', str(reg.iloc[0][region_col]), 'Wilayah Terbaik')
@@ -772,20 +715,16 @@ def tab_regional():
     with c1:
         st.markdown('<div class="glass-card"><p class="card-title">🏆 Revenue per Wilayah</p>', unsafe_allow_html=True)
         fig = go.Figure(go.Bar(x=reg['revenue'], y=reg[region_col], orientation='h',
-                               marker=dict(color=reg['revenue'],
-                                           colorscale=[[0,'#0c4a6e'],[1,'#38bdf8']])))
+                               marker=dict(color=reg['revenue'], colorscale=[[0,'#0c4a6e'],[1,'#38bdf8']])))
         fig.update_layout(yaxis=dict(autorange='reversed'))
         ct(fig); st.plotly_chart(fig, width='stretch')
         st.markdown('</div>', unsafe_allow_html=True)
-
     with c2:
         st.markdown('<div class="glass-card"><p class="card-title">🥧 Kontribusi Wilayah</p>', unsafe_allow_html=True)
-        fig = go.Figure(go.Pie(labels=reg[region_col], values=reg['revenue'],
-                               hole=0.5, marker=dict(colors=COLORS)))
+        fig = go.Figure(go.Pie(labels=reg[region_col], values=reg['revenue'], hole=0.5, marker=dict(colors=COLORS)))
         ct(fig); st.plotly_chart(fig, width='stretch')
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Growth per wilayah (jika ada date)
     if 'date' in df.columns:
         section("📈 Growth Tren per Wilayah")
         st.markdown('<div class="glass-card"><p class="card-title">📈 Tren Revenue per Wilayah (Bulanan)</p>', unsafe_allow_html=True)
@@ -795,18 +734,16 @@ def tab_regional():
         fig = go.Figure()
         for i, r in enumerate(top_regions):
             d = monthly_reg[monthly_reg[region_col] == r]
-            fig.add_trace(go.Scatter(x=d['date'], y=d['revenue'], name=r,
-                                     line=dict(color=COLORS[i], width=2), mode='lines+markers'))
+            fig.add_trace(go.Scatter(x=d['date'], y=d['revenue'], name=r, line=dict(color=COLORS[i], width=2), mode='lines+markers'))
         ct(fig); st.plotly_chart(fig, width='stretch')
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Table
     st.markdown('<div class="glass-card"><p class="card-title">📋 Detail per Wilayah</p>', unsafe_allow_html=True)
     tbl = reg.copy()
     tbl['Revenue'] = tbl['revenue'].apply(format_currency)
     tbl['Share %'] = (tbl['revenue'] / tbl['revenue'].sum() * 100).apply(lambda x: f"{x:.1f}%")
-    st.dataframe(tbl[[region_col,'Revenue','txn','Share %']].rename(
-        columns={region_col:'Wilayah','txn':'Transaksi'}), use_container_width=True, height=280)
+    st.dataframe(tbl[[region_col,'Revenue','txn','Share %']].rename(columns={region_col:'Wilayah','txn':'Transaksi'}),
+                 use_container_width=True, height=280)
     st.markdown(dl(reg, 'regional.csv', 'Download CSV'), unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -817,12 +754,10 @@ def tab_category():
     if df is None: return empty("🎯","Belum ada data")
     if 'revenue' not in df.columns: return empty("⚠️","Kolom revenue tidak ditemukan")
 
-    # ── Category Distribution ──
     if 'category' in df.columns:
         cat = df.groupby('category').agg(revenue=('revenue','sum'), txn=('revenue','count')).reset_index()
         cat['share'] = cat['revenue'] / cat['revenue'].sum() * 100
         cat = cat.sort_values('revenue', ascending=False)
-
         c1, c2 = st.columns(2)
         with c1:
             st.markdown('<div class="glass-card"><p class="card-title">🗂️ Revenue per Kategori</p>', unsafe_allow_html=True)
@@ -830,50 +765,38 @@ def tab_category():
                                    marker=dict(colors=COLORS), textfont=dict(color='white')))
             ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown('</div>', unsafe_allow_html=True)
-
         with c2:
-            st.markdown('<div class="glass-card"><p class="card-title">📊 Margin per Kategori</p>', unsafe_allow_html=True)
-            fig = go.Figure(go.Bar(x=cat['category'], y=cat['share'],
-                                   marker=dict(color=COLORS[:len(cat)])))
+            st.markdown('<div class="glass-card"><p class="card-title">📊 Share % per Kategori</p>', unsafe_allow_html=True)
+            fig = go.Figure(go.Bar(x=cat['category'], y=cat['share'], marker=dict(color=COLORS[:len(cat)])))
             fig.update_layout(yaxis=dict(ticksuffix='%'))
             ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Pareto 80/20 ──
     section("📐 Pareto Analysis (80/20 Rule)")
     if 'product' in df.columns:
         st.markdown('<div class="glass-card"><p class="card-title">📐 Produk mana yang hasilkan 80% Revenue?</p>', unsafe_allow_html=True)
         prod = df.groupby('product')['revenue'].sum().sort_values(ascending=False).reset_index()
-        prod['cumsum']  = prod['revenue'].cumsum()
-        prod['cumpct']  = prod['cumsum'] / prod['revenue'].sum() * 100
-        prod['rank']    = range(1, len(prod)+1)
-
-        # 80% cutoff
+        prod['cumsum'] = prod['revenue'].cumsum()
+        prod['cumpct'] = prod['cumsum'] / prod['revenue'].sum() * 100
+        prod['rank']   = range(1, len(prod)+1)
         cut80 = prod[prod['cumpct'] <= 80]
         pct_products = len(cut80) / len(prod) * 100
-
         st.markdown(f'<div class="insight-card">📌 <strong>{len(cut80)} produk ({pct_products:.0f}%)</strong> menghasilkan 80% dari total revenue — prinsip Pareto terbukti!</div>', unsafe_allow_html=True)
-
         fig = make_subplots(specs=[[{"secondary_y": True}]])
-        fig.add_trace(go.Bar(x=prod['product'].head(30), y=prod['revenue'].head(30),
-                             name='Revenue', marker_color='rgba(6,182,212,0.7)'), secondary_y=False)
-        fig.add_trace(go.Scatter(x=prod['product'].head(30), y=prod['cumpct'].head(30),
-                                 name='Kumulatif %', line=dict(color='#f59e0b', width=2)), secondary_y=True)
-        fig.add_hline(y=80, line_color='rgba(239,68,68,0.6)', line_dash='dash',
-                      annotation_text="80%", secondary_y=True)
+        fig.add_trace(go.Bar(x=prod['product'].head(30), y=prod['revenue'].head(30), name='Revenue', marker_color='rgba(6,182,212,0.7)'), secondary_y=False)
+        fig.add_trace(go.Scatter(x=prod['product'].head(30), y=prod['cumpct'].head(30), name='Kumulatif %', line=dict(color='#f59e0b', width=2)), secondary_y=True)
+        fig.add_hline(y=80, line_color='rgba(239,68,68,0.6)', line_dash='dash', annotation_text="80%", secondary_y=True)
         fig.update_layout(yaxis2=dict(ticksuffix='%', range=[0,105]))
         ct(fig); st.plotly_chart(fig, width='stretch')
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Slow-moving
         section("🐌 Produk Slow-Moving")
         st.markdown('<div class="glass-card"><p class="card-title">⚠️ Produk dengan Revenue Terendah (Perlu Evaluasi)</p>', unsafe_allow_html=True)
         slow = prod.tail(15).sort_values('revenue')
         slow['share'] = slow['revenue'] / prod['revenue'].sum() * 100
         slow['Revenue'] = slow['revenue'].apply(format_currency)
         slow['Share %'] = slow['share'].apply(lambda x: f"{x:.2f}%")
-        st.dataframe(slow[['product','Revenue','Share %']].rename(columns={'product':'Produk'}),
-                     use_container_width=True, height=250)
+        st.dataframe(slow[['product','Revenue','Share %']].rename(columns={'product':'Produk'}), use_container_width=True, height=250)
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ── TAB 7: ANOMALY ────────────────────────────────────────────────────────────
@@ -903,27 +826,21 @@ def tab_anomaly():
         if st.session_state.anomaly_df is not None:
             adf = st.session_state.anomaly_df
             normal, anoms = adf[adf['anomaly']==0], adf[adf['anomaly']==1]
-
             c_a, c_b, c_c = st.columns(3)
             with c_a: st.metric("Total Data", f"{len(adf):,}")
             with c_b: st.metric("Normal", f"{len(normal):,}")
             with c_c: st.metric("🚨 Anomali", f"{len(anoms):,}")
-
             st.markdown('<div class="glass-card"><p class="card-title">📈 Visualisasi Anomali</p>', unsafe_allow_html=True)
             if 'date' in adf.columns:
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(x=normal['date'], y=normal['revenue'], mode='markers',
-                                         name='Normal', marker=dict(color='#0ea5e9', size=4, opacity=0.5)))
-                fig.add_trace(go.Scatter(x=anoms['date'], y=anoms['revenue'], mode='markers',
-                                         name='🚨 Anomali', marker=dict(color='#ef4444', size=9, symbol='x')))
+                fig.add_trace(go.Scatter(x=normal['date'], y=normal['revenue'], mode='markers', name='Normal', marker=dict(color='#0ea5e9', size=4, opacity=0.5)))
+                fig.add_trace(go.Scatter(x=anoms['date'], y=anoms['revenue'], mode='markers', name='🚨 Anomali', marker=dict(color='#ef4444', size=9, symbol='x')))
                 ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown('</div>', unsafe_allow_html=True)
-
             if not anoms.empty:
                 st.markdown('<div class="glass-card"><p class="card-title">📋 Daftar Anomali</p>', unsafe_allow_html=True)
                 cols = [c for c in ['date','product','revenue','quantity','anomaly_score'] if c in anoms.columns]
-                st.dataframe(anoms[cols].sort_values('anomaly_score', ascending=False),
-                             use_container_width=True, height=260)
+                st.dataframe(anoms[cols].sort_values('anomaly_score', ascending=False), use_container_width=True, height=260)
                 st.markdown(dl(anoms, 'anomalies.csv', 'Download CSV'), unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
         else:
@@ -941,7 +858,6 @@ def tab_forecast():
         model_type = st.selectbox("Model", ['gradient_boosting','random_forest','extra_trees','ensemble','xgboost','lightgbm','ridge','linear'])
         periods    = st.slider("Periode Forecast (hari)", 7, 180, 30)
         do_tuning  = st.checkbox("Hyperparameter Tuning", False)
-
         if st.button("🚀 Train & Forecast", type="primary", use_container_width=True):
             with st.spinner(f"Training {model_type}..."):
                 try:
@@ -952,7 +868,6 @@ def tab_forecast():
                     st.session_state.forecast_df     = fc.forecast_future(df, periods=periods)
                     st.success("✅ Selesai!")
                 except Exception as e: st.error(f"❌ {e}")
-
         if st.session_state.forecast_metrics:
             m = st.session_state.forecast_metrics
             st.markdown("---")
@@ -968,27 +883,21 @@ def tab_forecast():
             if 'date' in df.columns:
                 daily = df.groupby(df['date'].dt.date)['revenue'].sum().reset_index()
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(x=daily['date'], y=daily['revenue'],
-                                         fill='tozeroy', mode='lines', name='Historis',
-                                         line=dict(color='#06b6d4', width=2),
-                                         fillcolor='rgba(6,182,212,0.1)'))
+                fig.add_trace(go.Scatter(x=daily['date'], y=daily['revenue'], fill='tozeroy', mode='lines', name='Historis',
+                                         line=dict(color='#06b6d4', width=2), fillcolor='rgba(6,182,212,0.1)'))
                 if 'forecast' in fc_df.columns:
-                    fig.add_trace(go.Scatter(x=fc_df['date'], y=fc_df['forecast'],
-                                             mode='lines', name='Forecast',
+                    fig.add_trace(go.Scatter(x=fc_df['date'], y=fc_df['forecast'], mode='lines', name='Forecast',
                                              line=dict(color='#f59e0b', width=2, dash='dash')))
                 ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown(dl(fc_df, 'forecast.csv', 'Download Forecast CSV'), unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
-
-            # Feature importance
             if st.session_state.forecaster:
                 imp = st.session_state.forecaster.get_feature_importance()
                 if not imp.empty and imp['importance'].sum() > 0:
                     st.markdown('<div class="glass-card"><p class="card-title">🔍 Feature Importance</p>', unsafe_allow_html=True)
                     top = imp.head(12)
                     fig = go.Figure(go.Bar(x=top['importance'], y=top['feature'], orientation='h',
-                                          marker=dict(color=top['importance'],
-                                                      colorscale=[[0,'#0c4a6e'],[1,'#38bdf8']])))
+                                          marker=dict(color=top['importance'], colorscale=[[0,'#0c4a6e'],[1,'#38bdf8']])))
                     fig.update_layout(yaxis=dict(autorange='reversed'))
                     ct(fig); st.plotly_chart(fig, width='stretch')
                     st.markdown('</div>', unsafe_allow_html=True)
@@ -1016,22 +925,19 @@ def tab_models():
         st.markdown('<div class="glass-card"><p class="card-title">📊 Hasil Perbandingan</p>', unsafe_allow_html=True)
         st.dataframe(cdf, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
-
         if 'test_rmse' in cdf.columns:
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown('<div class="glass-card"><p class="card-title">📉 RMSE (lebih kecil = lebih baik)</p>', unsafe_allow_html=True)
                 d = cdf['test_rmse'].dropna().astype(float).sort_values()
-                fig = go.Figure(go.Bar(x=d.index, y=d.values,
-                                       marker=dict(color=d.values, colorscale=[[0,'#06b6d4'],[1,'#ef4444']])))
+                fig = go.Figure(go.Bar(x=d.index, y=d.values, marker=dict(color=d.values, colorscale=[[0,'#06b6d4'],[1,'#ef4444']])))
                 ct(fig); st.plotly_chart(fig, width='stretch')
                 st.markdown('</div>', unsafe_allow_html=True)
             with c2:
                 if 'test_r2' in cdf.columns:
                     st.markdown('<div class="glass-card"><p class="card-title">📈 R² Score (lebih besar = lebih baik)</p>', unsafe_allow_html=True)
                     d2 = cdf['test_r2'].dropna().astype(float).sort_values(ascending=False)
-                    fig = go.Figure(go.Bar(x=d2.index, y=d2.values,
-                                          marker=dict(color=d2.values, colorscale=[[0,'#ef4444'],[1,'#10b981']])))
+                    fig = go.Figure(go.Bar(x=d2.index, y=d2.values, marker=dict(color=d2.values, colorscale=[[0,'#ef4444'],[1,'#10b981']])))
                     ct(fig); st.plotly_chart(fig, width='stretch')
                     st.markdown('</div>', unsafe_allow_html=True)
     else:
@@ -1058,7 +964,6 @@ def tab_reports():
                         st.download_button("⬇️ Download PDF", f.read(), 'sales_report.pdf', 'application/pdf', use_container_width=True)
                 except Exception as e: st.error(f"❌ {e}")
         st.markdown('</div>', unsafe_allow_html=True)
-
     with c2:
         st.markdown('<div class="glass-card"><p class="card-title">📊 Excel Report</p>', unsafe_allow_html=True)
         if st.button("Generate Excel", use_container_width=True):
@@ -1073,7 +978,6 @@ def tab_reports():
                             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', use_container_width=True)
                 except Exception as e: st.error(f"❌ {e}")
         st.markdown('</div>', unsafe_allow_html=True)
-
     with c3:
         st.markdown('<div class="glass-card"><p class="card-title">📁 CSV Export</p>', unsafe_allow_html=True)
         if st.button("Export CSV ZIP", use_container_width=True):
@@ -1091,7 +995,6 @@ def tab_reports():
                 except Exception as e: st.error(f"❌ {e}")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Raw data preview
     section("🔍 Raw Data Preview")
     st.markdown('<div class="glass-card"><p class="card-title">📋 Data (filtered)</p>', unsafe_allow_html=True)
     st.dataframe(df.head(500), use_container_width=True, height=350)
@@ -1104,19 +1007,14 @@ def main():
 
     st.markdown("""
     <style>
-    /* Selectbox dashboard teks putih */
     [data-testid="stSelectbox"] > div > div > div { color: #ffffff !important; font-weight: 600 !important; }
     [data-testid="stSelectbox"] svg { fill: #7dd3fc !important; }
-    /* Tabs full width */
-    .stTabs [data-baseweb="tab-list"] { width: 100% !important; }
-    .stTabs [data-baseweb="tab"] { flex: 1 !important; justify-content: center !important; }
     </style>
     """, unsafe_allow_html=True)
 
     tabs = st.tabs(["📊 Dashboard", "🚨 Anomaly", "🔮 Forecast", "⚖️ Model Comparison", "📑 Reports"])
 
     with tabs[0]:
-        df_raw = st.session_state.df
         left, _ = st.columns([2, 3])
         with left:
             dashboard_view = st.selectbox(
