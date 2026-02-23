@@ -490,7 +490,7 @@ def render_sidebar():
         st.markdown("""
         <div style="color:#475569;font-size:0.75rem;text-align:center;padding:10px 0">
             SalesML v2.0 · Built with Streamlit<br>
-            <span style="color:#6366f1">Powered by ML & AI</span>
+            <span style="color:#6366f1">Powered by Irvan_Signora</span>
         </div>""", unsafe_allow_html=True)
 
 # ── OVERVIEW TAB ─────────────────────────────────────────────────────────────
