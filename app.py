@@ -16,7 +16,7 @@ import base64
 
 from preprocessing import DataPreprocessor
 from ml_model import SalesForecaster, ProductSegmenter, AnomalyDetector, ModelComparator
-from utils import SalesAnalyzer, ReportGenerator, Visualizer, format_currency, create_sample_data
+from utils import SalesAnalyzer, ReportGenerator, Visualizer, format_currency, format_number, create_sample_data
 
 st.set_page_config(
     page_title="Sales ML Analytics",
@@ -81,7 +81,7 @@ html, body, [class*="css"] {
 }
 .hero-sub {
     font-size: 1.1rem;
-    color: rgba(255,255,255,0.8);
+    color: rgba(255,255,255,0.95);
     margin: 8px 0 0 0;
     font-weight: 400;
     position: relative; z-index: 1;
@@ -120,15 +120,15 @@ html, body, [class*="css"] {
     display: block;
 }
 .kpi-value {
-    font-size: 1.6rem;
+    font-size: 1.4rem;
     font-weight: 700;
-    color: #f1f5f9;
+    color: #ffffff;
     display: block;
     line-height: 1.2;
 }
 .kpi-label {
     font-size: 0.78rem;
-    color: #94a3b8;
+    color: #cbd5e1;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -157,7 +157,7 @@ html, body, [class*="css"] {
 .section-title {
     font-size: 1.1rem;
     font-weight: 700;
-    color: #f1f5f9;
+    color: #ffffff;
     margin: 0 0 20px 0;
     display: flex;
     align-items: center;
@@ -166,12 +166,12 @@ html, body, [class*="css"] {
 
 /* ── Insight Cards ── */
 .insight-card {
-    background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.05));
-    border: 1px solid rgba(99,102,241,0.25);
+    background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.08));
+    border: 1px solid rgba(99,102,241,0.35);
     border-radius: 12px;
     padding: 14px 18px;
     margin-bottom: 10px;
-    color: #cbd5e1;
+    color: #e2e8f0;
     font-size: 0.92rem;
     display: flex;
     align-items: flex-start;
@@ -183,10 +183,10 @@ html, body, [class*="css"] {
 .empty-state {
     text-align: center;
     padding: 80px 40px;
-    color: #64748b;
+    color: #94a3b8;
 }
 .empty-state .icon { font-size: 4rem; margin-bottom: 16px; display: block; }
-.empty-state h3 { color: #94a3b8; font-size: 1.3rem; margin-bottom: 8px; }
+.empty-state h3 { color: #cbd5e1; font-size: 1.3rem; margin-bottom: 8px; }
 
 /* ── Sidebar Enhancements ── */
 .sidebar-logo {
@@ -231,11 +231,11 @@ html, body, [class*="css"] {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: rgba(99,102,241,0.12);
-    border: 1px solid rgba(99,102,241,0.2);
+    background: rgba(99,102,241,0.18);
+    border: 1px solid rgba(99,102,241,0.35);
     border-radius: 8px;
     padding: 8px 12px;
-    color: #a5b4fc;
+    color: #c7d2fe;
     font-size: 0.82rem;
     font-weight: 600;
     margin: 4px 0;
@@ -377,7 +377,13 @@ def process_uploaded_files(uploaded_files):
         st.session_state.df = processed
         st.session_state.preprocessor = pp
         st.session_state.analyzer = SalesAnalyzer(processed)
+        cols_detected = {k: v for k, v in pp.mapped_columns.items()}
         st.success(f"🎉 Berhasil! Total: {len(processed):,} records")
+        if cols_detected:
+            st.info(f"✅ Kolom terdeteksi: {cols_detected}")
+        missing_critical = [c for c in ['date','revenue'] if c not in processed.columns]
+        if missing_critical:
+            st.warning(f"⚠️ Kolom penting tidak terdeteksi: {missing_critical}. Cek nama kolom di file Anda.")
 
 # ── SIDEBAR ──────────────────────────────────────────────────────────────────
 def render_sidebar():
@@ -452,9 +458,9 @@ def render_overview():
     c1,c2,c3,c4,c5 = st.columns(5)
     cards = [
         (c1, 'purple', '💰', format_currency(kpis.get('total_revenue',0)), 'Total Revenue'),
-        (c2, 'cyan',   '🧾', f"{kpis.get('total_transactions',0):,}", 'Transaksi'),
+        (c2, 'cyan',   '🧾', format_number(kpis.get('total_transactions',0)), 'Transaksi'),
         (c3, 'green',  '📦', format_currency(kpis.get('avg_order_value',0)), 'Avg Order'),
-        (c4, 'orange', '🏷️', str(kpis.get('unique_products',0)), 'Produk Unik'),
+        (c4, 'orange', '🏷️', format_number(kpis.get('unique_products',0)), 'Produk Unik'),
         (c5, 'pink',   '📈', format_currency(kpis.get('avg_daily_revenue',0)), 'Avg/Hari'),
     ]
     for col, color, icon, value, label in cards:
