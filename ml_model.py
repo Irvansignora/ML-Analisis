@@ -394,8 +394,19 @@ class SalesForecaster:
             forecast = self.model.predict(future)
             return forecast.iloc[-future_periods:]['yhat'].values
         
-        # Prepare features
-        X = df[self.feature_columns].fillna(0)
+        # Prepare features - encode kategorik dulu kalau perlu
+        df_pred = df.copy()
+        for col, le in self.label_encoders.items():
+            if col in df_pred.columns:
+                # Handle nilai yang tidak dikenal saat training
+                def safe_encode(val):
+                    s = str(val)
+                    return le.transform([s])[0] if s in le.classes_ else 0
+                df_pred[col] = df_pred[col].apply(safe_encode)
+        
+        X = df_pred[self.feature_columns].fillna(0)
+        # Pastikan semua kolom numerik
+        X = X.apply(pd.to_numeric, errors='coerce').fillna(0)
         X_scaled = self.scaler.transform(X)
         
         return self.model.predict(X_scaled)
@@ -437,10 +448,31 @@ class SalesForecaster:
         future_df['week_of_year'] = future_df['date'].dt.isocalendar().week
         future_df['is_weekend'] = future_df['day_of_week'].isin([5, 6]).astype(int)
         
-        # Fill other features dengan median dari data historis
+        # BUG FIX: isi feature columns dengan nilai yang sesuai tipenya
+        # - numerik  → median (representatif)
+        # - string/kategorikal → mode (nilai terbanyak), lalu label-encode
         for col in self.feature_columns:
             if col not in future_df.columns:
-                future_df[col] = df[col].median() if col in df.columns else 0
+                if col not in df.columns:
+                    future_df[col] = 0
+                    continue
+                
+                col_dtype = df[col].dtype
+                if pd.api.types.is_numeric_dtype(col_dtype):
+                    future_df[col] = df[col].median()
+                else:
+                    # Kategorikal: pakai mode, lalu encode sama seperti training
+                    mode_val = df[col].mode()
+                    mode_str = str(mode_val.iloc[0]) if not mode_val.empty else 'Unknown'
+                    if col in self.label_encoders:
+                        le = self.label_encoders[col]
+                        # Kalau mode_str ada di classes, encode; kalau tidak, pakai 0
+                        if mode_str in le.classes_:
+                            future_df[col] = le.transform([mode_str])[0]
+                        else:
+                            future_df[col] = 0
+                    else:
+                        future_df[col] = 0
         
         # Predict
         predictions = self.predict(future_df)
