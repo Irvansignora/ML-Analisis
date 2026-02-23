@@ -303,17 +303,19 @@ class DataPreprocessor:
         for col, strat in default_strategy.items():
             if col in df.columns and df[col].isnull().any():
                 if strat == 'mean' and pd.api.types.is_numeric_dtype(df[col]):
-                    df[col].fillna(df[col].mean(), inplace=True)
+                    # BUG FIX: fillna(inplace=True) silently fails di pandas 2.x (chained indexing)
+                    # Gunakan assignment langsung agar perubahan benar-benar tersimpan
+                    df[col] = df[col].fillna(df[col].mean())
                 elif strat == 'median' and pd.api.types.is_numeric_dtype(df[col]):
-                    df[col].fillna(df[col].median(), inplace=True)
+                    df[col] = df[col].fillna(df[col].median())
                 elif strat == 'mode':
-                    df[col].fillna(df[col].mode()[0] if not df[col].mode().empty else 'Unknown', inplace=True)
+                    fill_val = df[col].mode().iloc[0] if not df[col].mode().empty else 'Unknown'
+                    df[col] = df[col].fillna(fill_val)
                 elif strat == 'drop':
-                    df.dropna(subset=[col], inplace=True)
+                    df = df.dropna(subset=[col])
                 elif strat == 'zero':
-                    df[col].fillna(0, inplace=True)
+                    df[col] = df[col].fillna(0)
                 elif strat == 'ffill':
-                    # BUG FIX: fillna(method='ffill') deprecated di pandas 2.0+, gunakan ffill()
                     df[col] = df[col].ffill()
         
         missing_after = df.isnull().sum().sum()
