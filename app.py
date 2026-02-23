@@ -1,9 +1,3 @@
-"""
-Sales ML Analytics Dashboard - Full Rebuild
-============================================
-CEO-level dashboard: KPI, Sales, Profitability, Customer, Regional, Forecast, Anomaly
-"""
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -25,7 +19,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ── OCEAN BLUE GLASSMORPHISM CSS ──────────────────────────────────────────────
+
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -169,6 +163,16 @@ footer { visibility: hidden !important; }
 }
 [data-testid="stFileUploaderDropzoneInstructions"] div span { color: #7dd3fc !important; font-weight: 500 !important; }
 [data-testid="stFileUploaderDropzoneInstructions"] div small { color: #64748b !important; }
+[data-testid="stFileUploaderDropzone"] button {
+    background: transparent !important;
+    border: 1px solid rgba(6,182,212,0.4) !important;
+    color: #7dd3fc !important;
+    font-weight: 500 !important;
+}
+[data-testid="stFileUploaderDropzone"] button:hover {
+    background: rgba(6,182,212,0.1) !important;
+    color: #38bdf8 !important;
+}
 
 [data-testid="metric-container"] {
     background: rgba(6,182,212,0.07) !important; backdrop-filter: blur(12px) !important;
@@ -1074,22 +1078,38 @@ def tab_reports():
 def main():
     render_sidebar()
     tabs = st.tabs([
-        "📊 KPI Overview",
-        "📈 Sales Performance",
-        "💰 Profitability",
-        "👥 Customer & RFM",
-        "📍 Regional",
-        "🎯 Category & Pareto",
+        "📊 Dashboard",
         "🚨 Anomaly",
         "🔮 Forecast",
         "⚖️ Model Comparison",
         "📑 Reports"
     ])
-    fns = [tab_kpi, tab_sales, tab_profit, tab_customer,
-           tab_regional, tab_category, tab_anomaly, tab_forecast,
-           tab_models, tab_reports]
-    for tab, fn in zip(tabs, fns):
-        with tab: fn()
+
+    # Tab 0: Dashboard (KPI Overview + sub-filter)
+    with tabs[0]:
+        dashboard_view = st.selectbox(
+            "Pilih Tampilan",
+            ["📊 KPI Overview", "📈 Sales Performance", "💰 Profitability",
+             "👥 Customer & RFM", "📍 Regional", "🎯 Category & Pareto"],
+            label_visibility="collapsed"
+        )
+        if dashboard_view == "📊 KPI Overview":
+            tab_kpi()
+        elif dashboard_view == "📈 Sales Performance":
+            tab_sales()
+        elif dashboard_view == "💰 Profitability":
+            tab_profit()
+        elif dashboard_view == "👥 Customer & RFM":
+            tab_customer()
+        elif dashboard_view == "📍 Regional":
+            tab_regional()
+        elif dashboard_view == "🎯 Category & Pareto":
+            tab_category()
+
+    with tabs[1]: tab_anomaly()
+    with tabs[2]: tab_forecast()
+    with tabs[3]: tab_models()
+    with tabs[4]: tab_reports()
 
 if __name__ == "__main__":
     main()
