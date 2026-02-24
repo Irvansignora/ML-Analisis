@@ -299,6 +299,18 @@ def process_uploaded_files(files):
 def render_sidebar():
     with st.sidebar:
         st.markdown('<div class="sidebar-logo"><span class="logo-text">⚡ SalesML</span><span class="logo-sub">Analytics Pro</span></div>', unsafe_allow_html=True)
+        st.markdown('''<div style="text-align:center;padding:6px 0 10px 0;">
+  <a href="https://trakteer.id/irvansignora/tip" target="_blank"
+     style="display:inline-block;background:linear-gradient(135deg,#f97316,#ef4444);
+            color:white;font-size:0.72rem;font-weight:700;padding:6px 14px;
+            border-radius:20px;text-decoration:none;letter-spacing:0.5px;
+            box-shadow:0 4px 12px rgba(249,115,22,0.35);">
+    ☕ Trakteer Irvan
+  </a>
+  <div style="color:#475569;font-size:0.60rem;margin-top:4px;">
+    Gratis forever · Donasi seikhlasnya 🙏
+  </div>
+</div>''', unsafe_allow_html=True)
         st.markdown("---")
 
         st.markdown("##### 📁 Upload Data")
@@ -366,46 +378,7 @@ def render_sidebar():
                 st.rerun()
 
         st.markdown("---")
-        st.markdown("##### ⚙️ Model Settings")
-        
-        model_options = ['gradient_boosting','random_forest','extra_trees','ensemble','xgboost','lightgbm','ridge','linear']
-        current_saved = st.session_state.get('saved_model_type', 'gradient_boosting')
-        idx = model_options.index(current_saved) if current_saved in model_options else 0
-        
-        selected_model   = st.selectbox("Forecasting Model", model_options, index=idx)
-        selected_periods = st.slider("Forecast (hari)", 7, 180,
-                                     st.session_state.get('saved_forecast_periods', 30))
-        
-        if st.button("💾 Simpan Settings", type="primary"):
-            st.session_state.saved_model_type      = selected_model
-            st.session_state.saved_forecast_periods = selected_periods
-            st.session_state.model_type            = selected_model
-            st.session_state.forecast_periods      = selected_periods
-            st.success(f"✅ Tersimpan! Model: {selected_model}")
-        
-        # Tampilkan setting aktif
-        active_model   = st.session_state.get('saved_model_type', 'gradient_boosting')
-        active_periods = st.session_state.get('saved_forecast_periods', 30)
-        st.markdown(f'<div class="stat-badge">✅ Aktif: {active_model} · {active_periods}h</div>',
-                    unsafe_allow_html=True)
-
-        st.markdown("---")
-        st.markdown('''<div style="color:#334155;font-size:0.72rem;text-align:center;padding:6px 0">
-SalesML Analytics Pro v3.0<br><span style="color:#0ea5e9">Powered by Irvan_signora</span>
-</div>''', unsafe_allow_html=True)
-        st.markdown('''
-<div style="text-align:center;padding:10px 0 6px 0;">
-  <a href="https://trakteer.id/irvansignora/tip" target="_blank"
-     style="display:inline-block;background:linear-gradient(135deg,#f97316,#ef4444);
-            color:white;font-size:0.75rem;font-weight:700;padding:8px 16px;
-            border-radius:20px;text-decoration:none;letter-spacing:0.5px;
-            box-shadow:0 4px 15px rgba(249,115,22,0.4);transition:all 0.3s;">
-    ☕ Trakteer Irvan
-  </a>
-  <div style="color:#475569;font-size:0.62rem;margin-top:5px;">
-    Gratis forever · Donasi seikhlasnya 🙏
-  </div>
-</div>''', unsafe_allow_html=True)
+        st.markdown('<div style="color:#334155;font-size:0.68rem;text-align:center;padding:4px 0">SalesML Analytics Pro v3.0 · <span style="color:#0ea5e9">Irvan_signora</span></div>', unsafe_allow_html=True)
 
 # ── TAB 1: KPI OVERVIEW ───────────────────────────────────────────────────────
 def tab_kpi():
@@ -843,19 +816,14 @@ def tab_growth():
     if 'date' not in df.columns or 'revenue' not in df.columns:
         return empty("⚠️","Kolom date/revenue tidak ditemukan")
 
-    # ── FILTER KONTROL ──
     col_ctrl1, col_ctrl2, col_ctrl3 = st.columns(3)
-    with col_ctrl1:
-        period_type = st.radio("📅 Periode", ["Mingguan","Bulanan"], horizontal=True)
-    with col_ctrl2:
-        growth_dim = st.radio("📌 Dimensi", ["Produk","Salesperson","Regional/Cabang"], horizontal=True)
-    with col_ctrl3:
-        top_n = st.slider("Top N", 5, 20, 10)
+    with col_ctrl1: period_type = st.radio("📅 Periode", ["Mingguan","Bulanan"], horizontal=True)
+    with col_ctrl2: growth_dim  = st.radio("📌 Dimensi", ["Produk","Salesperson","Regional"], horizontal=True)
+    with col_ctrl3: top_n       = st.slider("Top N", 5, 20, 10)
 
-    freq = "W" if period_type == "Mingguan" else "M"
+    freq       = "W" if period_type == "Mingguan" else "M"
     freq_label = "Minggu" if period_type == "Mingguan" else "Bulan"
 
-    # ── TENTUKAN KOLOM DIMENSI ──
     if growth_dim == "Produk":
         dim_col = next((c for c in ['product','produk'] if c in df.columns), None)
     elif growth_dim == "Salesperson":
@@ -864,130 +832,95 @@ def tab_growth():
         dim_col = next((c for c in ['region','wilayah','cabang','kota','area','store','nama_toko'] if c in df.columns), None)
 
     if not dim_col:
-        st.warning(f"⚠️ Kolom untuk dimensi **{growth_dim}** tidak ditemukan di dataset.")
-        dim_col = None
+        st.warning(f"⚠️ Kolom untuk **{growth_dim}** tidak ditemukan di dataset.")
 
-    # ── OVERALL GROWTH TREND ──
-    section(f"📈 Overall Revenue Growth ({freq_label}an)")
+    # Overall trend
+    section(f"📈 Overall Revenue ({freq_label}an)")
     overall = df.groupby(df['date'].dt.to_period(freq))['revenue'].sum().reset_index()
     overall['date'] = overall['date'].dt.to_timestamp()
     overall['growth_pct'] = overall['revenue'].pct_change() * 100
-    overall['color'] = overall['growth_pct'].apply(lambda x: '#10b981' if x >= 0 else '#ef4444')
+    overall['color'] = overall['growth_pct'].apply(lambda x: '#10b981' if (pd.notna(x) and x >= 0) else '#ef4444')
 
     c1, c2 = st.columns(2)
     with c1:
         st.markdown('<div class="glass-card"><p class="card-title">📊 Revenue Trend</p>', unsafe_allow_html=True)
         fig = go.Figure()
-        fig.add_trace(go.Bar(x=overall['date'], y=overall['revenue'],
-                             name='Revenue', marker_color='rgba(6,182,212,0.65)'))
+        fig.add_trace(go.Bar(x=overall['date'], y=overall['revenue'], name='Revenue', marker_color='rgba(6,182,212,0.65)'))
         fig.add_trace(go.Scatter(x=overall['date'], y=overall['revenue'].rolling(3,min_periods=1).mean(),
                                  name='MA-3', line=dict(color='#f59e0b', width=2), mode='lines'))
         ct(fig); st.plotly_chart(fig, width='stretch')
         st.markdown('</div>', unsafe_allow_html=True)
     with c2:
         st.markdown('<div class="glass-card"><p class="card-title">📈 Growth % per Periode</p>', unsafe_allow_html=True)
-        fig2 = go.Figure()
-        fig2.add_trace(go.Bar(x=overall['date'], y=overall['growth_pct'],
-                              marker_color=overall['color'],
-                              name='Growth %'))
+        fig2 = go.Figure(go.Bar(x=overall['date'], y=overall['growth_pct'],
+                                marker_color=overall['color'], name='Growth %'))
         fig2.add_hline(y=0, line_color='rgba(255,255,255,0.2)', line_dash='dash')
         fig2.update_layout(yaxis=dict(ticksuffix='%'))
         ct(fig2); st.plotly_chart(fig2, width='stretch')
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── GROWTH PER DIMENSI ──
     if dim_col:
         section(f"🏆 Growth per {growth_dim} (Top {top_n})")
-
-        # Pivot: periode × dimensi
         grp = df.groupby([df['date'].dt.to_period(freq), dim_col])['revenue'].sum().reset_index()
         grp['date'] = grp['date'].dt.to_timestamp()
-
-        # Ambil 2 periode terakhir untuk hitung growth
         periods_sorted = sorted(grp['date'].unique())
-        
+
         if len(periods_sorted) >= 2:
             prev_period = periods_sorted[-2]
             curr_period = periods_sorted[-1]
-
-            prev_df = grp[grp['date'] == prev_period][[dim_col,'revenue']].rename(columns={'revenue':'prev'})
-            curr_df = grp[grp['date'] == curr_period][[dim_col,'revenue']].rename(columns={'revenue':'curr'})
+            prev_df = grp[grp['date']==prev_period][[dim_col,'revenue']].rename(columns={'revenue':'prev'})
+            curr_df = grp[grp['date']==curr_period][[dim_col,'revenue']].rename(columns={'revenue':'curr'})
             merged  = curr_df.merge(prev_df, on=dim_col, how='left').fillna(0)
-            merged['growth_pct'] = np.where(
-                merged['prev'] > 0,
-                (merged['curr'] - merged['prev']) / merged['prev'] * 100,
-                100.0
-            )
+            merged['growth_pct'] = np.where(merged['prev']>0,
+                (merged['curr']-merged['prev'])/merged['prev']*100, 100.0)
             merged = merged.sort_values('curr', ascending=False).head(top_n)
 
             c1, c2 = st.columns(2)
             with c1:
-                st.markdown(f'<div class="glass-card"><p class="card-title">💰 Revenue {freq_label} Ini vs Sebelumnya</p>', unsafe_allow_html=True)
+                st.markdown(f'<div class="glass-card"><p class="card-title">💰 {freq_label} Ini vs Sebelumnya</p>', unsafe_allow_html=True)
                 fig = go.Figure()
-                fig.add_trace(go.Bar(name=f'{freq_label} Lalu', x=merged[dim_col], y=merged['prev'],
-                                     marker_color='rgba(100,116,139,0.5)'))
-                fig.add_trace(go.Bar(name=f'{freq_label} Ini', x=merged[dim_col], y=merged['curr'],
-                                     marker_color='rgba(6,182,212,0.8)'))
+                fig.add_trace(go.Bar(name=f'{freq_label} Lalu', x=merged[dim_col], y=merged['prev'], marker_color='rgba(100,116,139,0.5)'))
+                fig.add_trace(go.Bar(name=f'{freq_label} Ini',  x=merged[dim_col], y=merged['curr'], marker_color='rgba(6,182,212,0.8)'))
                 fig.update_layout(barmode='group')
                 ct(fig); st.plotly_chart(fig, width='stretch')
                 st.markdown('</div>', unsafe_allow_html=True)
             with c2:
                 st.markdown(f'<div class="glass-card"><p class="card-title">📈 Growth % per {growth_dim}</p>', unsafe_allow_html=True)
-                merged_sorted = merged.sort_values('growth_pct', ascending=True)
-                bar_colors = ['#10b981' if x >= 0 else '#ef4444' for x in merged_sorted['growth_pct']]
-                fig = go.Figure(go.Bar(
-                    x=merged_sorted['growth_pct'], y=merged_sorted[dim_col],
-                    orientation='h', marker_color=bar_colors,
-                    text=merged_sorted['growth_pct'].apply(lambda x: f'{x:+.1f}%'),
-                    textposition='outside'
-                ))
+                ms = merged.sort_values('growth_pct', ascending=True)
+                bar_colors = ['#10b981' if x>=0 else '#ef4444' for x in ms['growth_pct']]
+                fig = go.Figure(go.Bar(x=ms['growth_pct'], y=ms[dim_col], orientation='h',
+                                       marker_color=bar_colors,
+                                       text=ms['growth_pct'].apply(lambda x: f'{x:+.1f}%'),
+                                       textposition='outside'))
                 fig.add_vline(x=0, line_color='rgba(255,255,255,0.2)', line_dash='dash')
                 fig.update_layout(xaxis=dict(ticksuffix='%'))
                 ct(fig); st.plotly_chart(fig, width='stretch')
                 st.markdown('</div>', unsafe_allow_html=True)
 
-        # ── HEATMAP TREND ──
-        section(f"🔥 Heatmap Growth — {growth_dim} × {freq_label}")
-        pivot = grp.pivot_table(index=dim_col, columns='date', values='revenue', aggfunc='sum').fillna(0)
-        # Ambil top_n berdasarkan total
-        pivot = pivot.loc[pivot.sum(axis=1).nlargest(top_n).index]
-        # Format kolom tanggal
-        pivot.columns = [str(c)[:10] for c in pivot.columns]
-
-        st.markdown('<div class="glass-card"><p class="card-title">🗺️ Revenue Heatmap</p>', unsafe_allow_html=True)
-        fig = go.Figure(go.Heatmap(
-            z=pivot.values,
-            x=pivot.columns.tolist(),
-            y=pivot.index.tolist(),
-            colorscale=[[0,'#020b18'],[0.5,'#0369a1'],[1,'#06b6d4']],
-            hoverongaps=False,
-            hovertemplate='%{y}<br>%{x}<br>Revenue: %{z:,.0f}<extra></extra>'
-        ))
-        fig.update_layout(height=max(300, top_n * 35))
-        ct(fig); st.plotly_chart(fig, width='stretch')
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # ── FASTEST GROWING & DECLINING ──
-        if len(periods_sorted) >= 2:
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown('<div class="glass-card"><p class="card-title">🚀 Fastest Growing</p>', unsafe_allow_html=True)
-                top_grow = merged.sort_values('growth_pct', ascending=False).head(5)
-                for _, row in top_grow.iterrows():
-                    pct = row['growth_pct']
-                    rev = format_currency(row['curr'])
-                    st.markdown(f'<div class="insight-card">🚀 <strong>{row[dim_col]}</strong> — {pct:+.1f}% · {rev}</div>', unsafe_allow_html=True)
+                for _, row in merged.sort_values('growth_pct', ascending=False).head(5).iterrows():
+                    st.markdown(f'<div class="insight-card">🚀 <strong>{row[dim_col]}</strong> — {row["growth_pct"]:+.1f}% · {format_currency(row["curr"])}</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
             with c2:
                 st.markdown('<div class="glass-card"><p class="card-title">⚠️ Paling Turun</p>', unsafe_allow_html=True)
-                top_dec = merged.sort_values('growth_pct').head(5)
-                for _, row in top_dec.iterrows():
-                    pct = row['growth_pct']
-                    rev = format_currency(row['curr'])
-                    st.markdown(f'<div class="insight-card" style="border-color:rgba(239,68,68,0.3)">📉 <strong>{row[dim_col]}</strong> — {pct:+.1f}% · {rev}</div>', unsafe_allow_html=True)
+                for _, row in merged.sort_values('growth_pct').head(5).iterrows():
+                    st.markdown(f'<div class="insight-card" style="border-color:rgba(239,68,68,0.3)">📉 <strong>{row[dim_col]}</strong> — {row["growth_pct"]:+.1f}% · {format_currency(row["curr"])}</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-        # Download
+        # Heatmap
+        section(f"🔥 Heatmap — {growth_dim} × {freq_label}")
+        pivot = grp.pivot_table(index=dim_col, columns='date', values='revenue', aggfunc='sum').fillna(0)
+        pivot = pivot.loc[pivot.sum(axis=1).nlargest(top_n).index]
+        pivot.columns = [str(c)[:10] for c in pivot.columns]
+        st.markdown('<div class="glass-card"><p class="card-title">🗺️ Revenue Heatmap</p>', unsafe_allow_html=True)
+        fig = go.Figure(go.Heatmap(z=pivot.values, x=pivot.columns.tolist(), y=pivot.index.tolist(),
+                                   colorscale=[[0,'#020b18'],[0.5,'#0369a1'],[1,'#06b6d4']],
+                                   hovertemplate='%{y}<br>%{x}<br>Revenue: %{z:,.0f}<extra></extra>'))
+        fig.update_layout(height=max(300, top_n*35))
+        ct(fig); st.plotly_chart(fig, width='stretch')
+        st.markdown('</div>', unsafe_allow_html=True)
         st.markdown(dl(grp, f'growth_{growth_dim.lower()}.csv', f'Download Growth {growth_dim} CSV'), unsafe_allow_html=True)
 
 # ── TAB 7: ANOMALY ────────────────────────────────────────────────────────────
@@ -1045,29 +978,38 @@ def tab_forecast():
 
     c1, c2 = st.columns([1, 3])
     with c1:
-        st.markdown('<div class="glass-card"><p class="card-title">⚙️ Settings</p>', unsafe_allow_html=True)
-        
-        # FIX: Model settings diambil dari sidebar (session_state) agar konsisten
-        # User cukup atur di sidebar → klik Simpan → lalu Train di sini
-        saved_model  = st.session_state.get('saved_model_type', 'gradient_boosting')
+        st.markdown('<div class="glass-card"><p class="card-title">⚙️ Model Settings</p>', unsafe_allow_html=True)
+
+        model_options = ['gradient_boosting','random_forest','extra_trees','ensemble',
+                         'xgboost','lightgbm','ridge','linear']
+        saved_model   = st.session_state.get('saved_model_type', 'gradient_boosting')
         saved_periods = st.session_state.get('saved_forecast_periods', 30)
-        
-        st.info(f"🤖 Model: **{saved_model}**\n\n📅 Periode: **{saved_periods} hari**")
-        st.caption("Ubah model & periode di sidebar ⚙️ lalu klik **Simpan Settings**")
-        
-        do_tuning = st.checkbox("Hyperparameter Tuning", False)
-        
+        idx = model_options.index(saved_model) if saved_model in model_options else 0
+
+        model_type = st.selectbox("Forecasting Model", model_options, index=idx)
+        periods    = st.slider("Periode Forecast (hari)", 7, 180, saved_periods)
+        do_tuning  = st.checkbox("Hyperparameter Tuning", False)
+
+        if st.button("💾 Simpan Settings"):
+            st.session_state.saved_model_type       = model_type
+            st.session_state.saved_forecast_periods = periods
+            st.success(f"✅ Tersimpan!")
+
+        st.markdown("---")
+
         if st.button("🚀 Train & Forecast", type="primary"):
-            with st.spinner(f"Training {saved_model}..."):
+            run_model   = st.session_state.get('saved_model_type', model_type)
+            run_periods = st.session_state.get('saved_forecast_periods', periods)
+            with st.spinner(f"Training {run_model}..."):
                 try:
-                    fc = SalesForecaster(model_type=saved_model)
+                    fc = SalesForecaster(model_type=run_model)
                     m  = fc.fit(df, do_tuning=do_tuning)
                     st.session_state.forecaster       = fc
                     st.session_state.forecast_metrics = m
-                    st.session_state.forecast_df      = fc.forecast_future(df, periods=saved_periods)
-                    st.success(f"✅ {saved_model} selesai!")
+                    st.session_state.forecast_df      = fc.forecast_future(df, periods=run_periods)
+                    st.success(f"✅ {run_model} selesai!")
                 except Exception as e: st.error(f"❌ {e}")
-        
+
         if st.session_state.forecast_metrics:
             m = st.session_state.forecast_metrics
             st.markdown("---")
@@ -1221,8 +1163,7 @@ def main():
             dashboard_view = st.selectbox(
                 "view",
                 ["📊 KPI Overview", "📈 Sales Performance", "💰 Profitability",
-                 "👥 Customer & RFM", "📍 Regional", "🎯 Category & Pareto",
-                 "📊 Growth Analysis"],
+                 "👥 Customer & RFM", "📍 Regional", "🎯 Category & Pareto", "📊 Growth Analysis"],
                 label_visibility="collapsed", key="dashboard_view"
             )
         st.markdown('<hr style="border:none;border-top:1px solid rgba(6,182,212,0.15);margin:4px 0 12px 0">', unsafe_allow_html=True)
