@@ -962,13 +962,13 @@ class ReportGenerator:
                        forecast_df=None, segments_df=None, anomaly_df=None) -> str:
         """
         Generate presentasi PowerPoint dari hasil analisis data.
-        Menggunakan generate_pptx.js via Node.js.
-        File generate_pptx.js harus ada di folder yang sama dengan utils.py.
+        Menggunakan generate_pptx_py.py via python-pptx (no Node.js).
+        File generate_pptx_py.py harus ada di folder yang sama dengan utils.py.
 
         Returns:
             str: path ke file .pptx
         """
-        import subprocess, json
+        import json
         from pathlib import Path
 
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -1212,31 +1212,29 @@ class ReportGenerator:
             'insights':          insights,
         })
 
-        # ── Locate generate_pptx.js ──
-        js_candidates = [
-            Path(__file__).parent / 'generate_pptx.js',
-            Path('generate_pptx.js'),
-            Path('/home/claude/generate_pptx.js'),
-        ]
-        js_script = next((p for p in js_candidates if p.exists()), None)
-        if js_script is None:
-            raise FileNotFoundError(
-                "generate_pptx.js tidak ditemukan. "
-                "Letakkan di folder yang sama dengan utils.py."
-            )
-
-        # ── Run Node.js ──
-        result = subprocess.run(
-            ['node', str(js_script)],
-            input=json.dumps(payload),
-            capture_output=True, text=True, timeout=120
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"PPTX generation failed:\n{result.stderr[:2000]}")
-        if not Path(output_path).exists():
+        # ── Generate PPTX dengan pure Python (python-pptx) ──
+        # Tidak perlu Node.js — bekerja di Streamlit Cloud & semua environment
+        try:
+            import sys, importlib
+            # Cari generate_pptx_py di folder yang sama dengan utils.py
+            _gen_candidates = [
+                Path(__file__).parent / 'generate_pptx_py.py',
+                Path('generate_pptx_py.py'),
+            ]
+            _gen_path = next((p for p in _gen_candidates if p.exists()), None)
+            if _gen_path is None:
+                raise FileNotFoundError(
+                    "generate_pptx_py.py tidak ditemukan. "
+                    "Letakkan di folder yang sama dengan utils.py."
+                )
+            import importlib.util as _ilu
+            _spec = _ilu.spec_from_file_location("generate_pptx_py", str(_gen_path))
+            _mod  = _ilu.module_from_spec(_spec)
+            _spec.loader.exec_module(_mod)
+            _mod.build_presentation(payload, output_path)
+        except ImportError as e:
             raise RuntimeError(
-                f"File PPTX tidak terbuat.\nstdout: {result.stdout[:500]}\n"
-                f"stderr: {result.stderr[:500]}"
+                f"python-pptx tidak terinstall. Jalankan: pip install python-pptx\n{e}"
             )
 
         logger.info(f"PPTX exported → {output_path}  ({Path(output_path).stat().st_size // 1024} KB)")
