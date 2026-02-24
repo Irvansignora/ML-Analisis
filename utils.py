@@ -341,275 +341,620 @@ class SalesAnalyzer:
 
 class ReportGenerator:
     """
-    Kelas untuk generate report dalam berbagai format
+    Kelas untuk generate report dalam berbagai format.
+    Mendukung kolom hasil preprocessing (nama_produk, kategori, pelanggan, kota, dll)
+    maupun kolom standar (product, category, customer, region).
     """
-    
+
+    # Fallback kolom per dimensi — cek dari kiri ke kanan
+    _COL_PRODUCT  = ['product','nama_produk','produk','item','barang']
+    _COL_CATEGORY = ['category','kategori']
+    _COL_CUSTOMER = ['customer','pelanggan','buyer','pembeli','customer_name','nama_pelanggan']
+    _COL_REGION   = ['region','kota','city','wilayah','provinsi','cabang','area']
+    _COL_SALES    = ['salesperson','sales_person','sales','nama_sales','agen']
+    _COL_STORE    = ['store','nama_toko','toko','outlet']
+    _COL_CHANNEL  = ['channel','marketplace','platform']
+    _COL_COST     = ['cost','hpp','harga_pokok','cogs']
+
     def __init__(self, analyzer: SalesAnalyzer):
-        """
-        Initialize report generator
-        
-        Parameters:
-        -----------
-        analyzer : SalesAnalyzer
-            Instance SalesAnalyzer
-        """
         self.analyzer = analyzer
         logger.info("ReportGenerator initialized")
-    
+
+    def _col(self, candidates: list) -> Optional[str]:
+        """Return first matching column name found in df, or None."""
+        for c in candidates:
+            if c in self.analyzer.df.columns:
+                return c
+        return None
+
+    def _safe_group(self, dim_col: str, top_n: int = 15) -> pd.DataFrame:
+        """Group revenue by dim_col, return top_n sorted desc."""
+        df = self.analyzer.df
+        if dim_col not in df.columns or 'revenue' not in df.columns:
+            return pd.DataFrame()
+        g = df.groupby(dim_col)['revenue'].sum().nlargest(top_n).reset_index()
+        g.columns = [dim_col, 'revenue']
+        return g
+
+    def _page_title(self, pdf, title: str, subtitle: str = ''):
+        """Save a title-only page."""
+        fig, ax = plt.subplots(figsize=(16, 2))
+        ax.axis('off')
+        ax.text(0.5, 0.7, title, ha='center', va='center',
+                fontsize=20, weight='bold', transform=ax.transAxes)
+        if subtitle:
+            ax.text(0.5, 0.25, subtitle, ha='center', va='center',
+                    fontsize=11, color='gray', transform=ax.transAxes)
+        pdf.savefig(fig, bbox_inches='tight')
+        plt.close()
+
+    # ── PDF ──────────────────────────────────────────────────────────────────
     def generate_pdf_report(self, output_path: str = 'reports/sales_report.pdf',
-                           forecast_df: Optional[pd.DataFrame] = None,
-                           segments_df: Optional[pd.DataFrame] = None,
-                           anomaly_df: Optional[pd.DataFrame] = None):
-        """
-        Generate PDF report lengkap
-        
-        Parameters:
-        -----------
-        output_path : str
-            Path untuk menyimpan PDF
-        forecast_df : pd.DataFrame, optional
-            DataFrame forecast
-        segments_df : pd.DataFrame, optional
-            DataFrame segmentasi
-        anomaly_df : pd.DataFrame, optional
-            DataFrame anomaly detection
-        """
+                            forecast_df: Optional[pd.DataFrame] = None,
+                            segments_df: Optional[pd.DataFrame] = None,
+                            anomaly_df: Optional[pd.DataFrame] = None):
+        """Generate PDF report lengkap — semua section dashboard."""
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        
+        df = self.analyzer.df
+        COLORS_MPL = ['#06b6d4','#0ea5e9','#10b981','#f59e0b','#8b5cf6',
+                      '#ec4899','#38bdf8','#ef4444','#a78bfa','#34d399']
+
         with PdfPages(output_path) as pdf:
-            # Page 1: Executive Summary
-            fig, ax = plt.subplots(figsize=(11.69, 8.27))
-            ax.axis('off')
-            
-            # Title
-            fig.text(0.5, 0.95, 'Sales Analysis Report', 
-                    ha='center', fontsize=24, weight='bold')
-            fig.text(0.5, 0.90, f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")}',
-                    ha='center', fontsize=12)
-            
-            # KPIs
-            kpis = self.analyzer.calculate_kpis()
-            y_pos = 0.80
-            fig.text(0.1, y_pos, 'Key Performance Indicators', 
-                    fontsize=16, weight='bold')
-            
-            kpi_texts = [
-                f"Total Revenue: Rp {kpis.get('total_revenue', 0):,.0f}",
-                f"Total Transactions: {kpis.get('total_transactions', 0):,}",
-                f"Average Order Value: Rp {kpis.get('avg_order_value', 0):,.0f}",
-                f"Unique Products: {kpis.get('unique_products', 0)}",
-                f"Unique Customers: {kpis.get('unique_customers', 0)}"
-            ]
-            
-            for i, text in enumerate(kpi_texts):
-                fig.text(0.15, y_pos - 0.05 - (i * 0.05), text, fontsize=12)
-            
-            # Insights
-            fig.text(0.1, 0.45, 'Key Insights', fontsize=16, weight='bold')
-            insights = self.analyzer.generate_insights()
-            for i, insight in enumerate(insights[:5]):
-                fig.text(0.15, 0.40 - (i * 0.04), f"• {insight}", fontsize=10)
-            
-            pdf.savefig(fig, bbox_inches='tight')
-            plt.close()
-            
-            # Page 2: Revenue Trend
-            fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-            
-            # Daily revenue trend
-            daily = self.analyzer.df.groupby(self.analyzer.df['date'].dt.date)['revenue'].sum()
-            axes[0, 0].plot(daily.index, daily.values, linewidth=2)
-            axes[0, 0].set_title('Daily Revenue Trend', fontsize=14, weight='bold')
-            axes[0, 0].set_xlabel('Date')
-            axes[0, 0].set_ylabel('Revenue')
-            axes[0, 0].tick_params(axis='x', rotation=45)
-            
-            # Monthly revenue
-            monthly = self.analyzer.calculate_growth_metrics()
-            if not monthly.empty:
-                axes[0, 1].bar(monthly['date'], monthly['revenue'])
-                axes[0, 1].set_title('Monthly Revenue', fontsize=14, weight='bold')
-                axes[0, 1].set_xlabel('Month')
-                axes[0, 1].set_ylabel('Revenue')
-                axes[0, 1].tick_params(axis='x', rotation=45)
-            
-            # Top products
-            top_products = self.analyzer.get_top_products(n=10)
-            if not top_products.empty:
-                axes[1, 0].barh(top_products['product'], top_products['revenue'])
-                axes[1, 0].set_title('Top 10 Products by Revenue', fontsize=14, weight='bold')
-                axes[1, 0].set_xlabel('Revenue')
-            
-            # Category distribution
-            categories = self.analyzer.get_category_analysis()
-            if not categories.empty:
-                axes[1, 1].pie(categories['total_revenue'], labels=categories['category'],
-                              autopct='%1.1f%%')
-                axes[1, 1].set_title('Revenue by Category', fontsize=14, weight='bold')
-            
-            plt.tight_layout()
-            pdf.savefig(fig, bbox_inches='tight')
-            plt.close()
-            
-            # Page 3: Forecast (if available)
+
+            # ── PAGE 1: COVER ─────────────────────────────────────────────
+            try:
+                fig, ax = plt.subplots(figsize=(16, 10))
+                ax.axis('off')
+                fig.patch.set_facecolor('#020b18')
+                kpis = self.analyzer.calculate_kpis()
+                ax.text(0.5, 0.88, 'Sales ML Analytics Report',
+                        ha='center', fontsize=26, weight='bold', color='white',
+                        transform=ax.transAxes)
+                ax.text(0.5, 0.82, f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")}',
+                        ha='center', fontsize=12, color='#7dd3fc', transform=ax.transAxes)
+                ax.plot([0.05, 0.95], [0.78, 0.78], color='#06b6d4', linewidth=1,
+                        transform=ax.transAxes)
+
+                kpi_items = [
+                    ('Total Revenue',      f"Rp {kpis.get('total_revenue', 0):,.0f}"),
+                    ('Total Transaksi',    f"{kpis.get('total_transactions', 0):,}"),
+                    ('Avg Order Value',    f"Rp {kpis.get('avg_order_value', 0):,.0f}"),
+                    ('Unique Produk',      str(kpis.get('unique_products', 'N/A'))),
+                    ('Unique Customer',    str(kpis.get('unique_customers', 'N/A'))),
+                    ('Rentang Data',       f"{kpis.get('date_range_days', 0)} hari"),
+                ]
+                for i, (label, value) in enumerate(kpi_items):
+                    col = i % 3
+                    row = i // 3
+                    x = 0.10 + col * 0.30
+                    y = 0.65 - row * 0.15
+                    ax.text(x, y, label, fontsize=11, color='#7dd3fc',
+                            transform=ax.transAxes)
+                    ax.text(x, y - 0.05, value, fontsize=14, weight='bold',
+                            color='white', transform=ax.transAxes)
+
+                ax.text(0.5, 0.28, 'Key Insights', ha='center', fontsize=14,
+                        weight='bold', color='#38bdf8', transform=ax.transAxes)
+                insights = self.analyzer.generate_insights()
+                for i, ins in enumerate(insights[:6]):
+                    ax.text(0.08, 0.22 - i * 0.04, f'• {ins[:110]}',
+                            fontsize=9, color='#e0f2fe', transform=ax.transAxes)
+                pdf.savefig(fig, bbox_inches='tight', facecolor=fig.get_facecolor())
+                plt.close()
+            except Exception as e:
+                logger.warning(f"PDF cover error: {e}")
+                plt.close('all')
+
+            # ── PAGE 2: REVENUE TREND ─────────────────────────────────────
+            try:
+                fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+                fig.suptitle('Revenue & Trend Analysis', fontsize=16, weight='bold')
+
+                # Daily trend
+                daily = df.groupby(df['date'].dt.date)['revenue'].sum()
+                axes[0,0].plot(daily.index, daily.values, color='#06b6d4', linewidth=1.5)
+                axes[0,0].fill_between(daily.index, daily.values, alpha=0.15, color='#06b6d4')
+                axes[0,0].set_title('Daily Revenue Trend')
+                axes[0,0].tick_params(axis='x', rotation=45)
+                axes[0,0].set_ylabel('Revenue (Rp)')
+
+                # Monthly bar
+                monthly = self.analyzer.calculate_growth_metrics()
+                if not monthly.empty:
+                    axes[0,1].bar(monthly['date'].astype(str), monthly['revenue'],
+                                  color='#0ea5e9', alpha=0.8)
+                    axes[0,1].set_title('Monthly Revenue')
+                    axes[0,1].tick_params(axis='x', rotation=45)
+                    axes[0,1].set_ylabel('Revenue (Rp)')
+
+                # Top products
+                prod_col = self._col(self._COL_PRODUCT)
+                if prod_col:
+                    tp = self._safe_group(prod_col, 10)
+                    if not tp.empty:
+                        axes[1,0].barh(tp[prod_col], tp['revenue'], color=COLORS_MPL[:len(tp)])
+                        axes[1,0].set_title('Top 10 Produk by Revenue')
+                        axes[1,0].set_xlabel('Revenue (Rp)')
+
+                # Category pie
+                cat_col = self._col(self._COL_CATEGORY)
+                if cat_col:
+                    cat = self._safe_group(cat_col, 8)
+                    if not cat.empty:
+                        axes[1,1].pie(cat['revenue'], labels=cat[cat_col],
+                                      autopct='%1.1f%%', colors=COLORS_MPL[:len(cat)])
+                        axes[1,1].set_title('Revenue by Kategori')
+
+                plt.tight_layout()
+                pdf.savefig(fig, bbox_inches='tight')
+                plt.close()
+            except Exception as e:
+                logger.warning(f"PDF page 2 error: {e}")
+                plt.close('all')
+
+            # ── PAGE 3: SALES PERFORMANCE ─────────────────────────────────
+            try:
+                fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+                fig.suptitle('Sales Performance', fontsize=16, weight='bold')
+
+                sales_col = self._col(self._COL_SALES)
+                if sales_col:
+                    sp = self._safe_group(sales_col, 10)
+                    if not sp.empty:
+                        axes[0].barh(sp[sales_col], sp['revenue'],
+                                     color='#10b981', alpha=0.8)
+                        axes[0].set_title('Top Salesperson by Revenue')
+                        axes[0].set_xlabel('Revenue (Rp)')
+
+                chan_col = self._col(self._COL_CHANNEL)
+                if chan_col:
+                    ch = self._safe_group(chan_col, 8)
+                    if not ch.empty:
+                        axes[1].pie(ch['revenue'], labels=ch[chan_col],
+                                    autopct='%1.1f%%', colors=COLORS_MPL[:len(ch)])
+                        axes[1].set_title('Revenue by Channel')
+
+                plt.tight_layout()
+                pdf.savefig(fig, bbox_inches='tight')
+                plt.close()
+            except Exception as e:
+                logger.warning(f"PDF page 3 error: {e}")
+                plt.close('all')
+
+            # ── PAGE 4: PROFITABILITY ─────────────────────────────────────
+            try:
+                cost_col = self._col(self._COL_COST)
+                if cost_col and 'revenue' in df.columns:
+                    fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+                    fig.suptitle('Profitability Analysis', fontsize=16, weight='bold')
+
+                    prod_col = self._col(self._COL_PRODUCT)
+                    if prod_col:
+                        prof = df.groupby(prod_col).agg(
+                            revenue=('revenue','sum'),
+                            cost=(cost_col,'sum')
+                        ).reset_index()
+                        prof['profit'] = prof['revenue'] - prof['cost']
+                        prof['margin'] = prof['profit'] / prof['revenue'] * 100
+                        top_prof = prof.nlargest(10, 'profit')
+
+                        axes[0].barh(top_prof[prod_col], top_prof['profit'],
+                                     color=['#10b981' if x >= 0 else '#ef4444'
+                                            for x in top_prof['profit']])
+                        axes[0].set_title('Top 10 Produk by Profit')
+                        axes[0].set_xlabel('Profit (Rp)')
+
+                        top_margin = prof.nlargest(10, 'margin')
+                        axes[1].barh(top_margin[prod_col], top_margin['margin'],
+                                     color='#8b5cf6', alpha=0.8)
+                        axes[1].set_title('Top 10 Produk by Margin %')
+                        axes[1].set_xlabel('Margin (%)')
+
+                    plt.tight_layout()
+                    pdf.savefig(fig, bbox_inches='tight')
+                    plt.close()
+            except Exception as e:
+                logger.warning(f"PDF page 4 error: {e}")
+                plt.close('all')
+
+            # ── PAGE 5: REGIONAL ─────────────────────────────────────────
+            try:
+                reg_col = self._col(self._COL_REGION)
+                store_col = self._col(self._COL_STORE)
+                fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+                fig.suptitle('Regional & Store Analysis', fontsize=16, weight='bold')
+                plotted = 0
+
+                if reg_col:
+                    rg = self._safe_group(reg_col, 10)
+                    if not rg.empty:
+                        axes[0].bar(rg[reg_col], rg['revenue'],
+                                    color=COLORS_MPL[:len(rg)], alpha=0.85)
+                        axes[0].set_title(f'Revenue by {reg_col.replace("_"," ").title()}')
+                        axes[0].tick_params(axis='x', rotation=45)
+                        axes[0].set_ylabel('Revenue (Rp)')
+                        plotted += 1
+
+                if store_col:
+                    st_g = self._safe_group(store_col, 10)
+                    if not st_g.empty:
+                        axes[1].barh(st_g[store_col], st_g['revenue'],
+                                     color='#f59e0b', alpha=0.8)
+                        axes[1].set_title('Revenue by Toko/Outlet')
+                        axes[1].set_xlabel('Revenue (Rp)')
+                        plotted += 1
+
+                if plotted > 0:
+                    plt.tight_layout()
+                    pdf.savefig(fig, bbox_inches='tight')
+                plt.close()
+            except Exception as e:
+                logger.warning(f"PDF page 5 error: {e}")
+                plt.close('all')
+
+            # ── PAGE 6: CUSTOMER / RFM ────────────────────────────────────
+            try:
+                cust_col = self._col(self._COL_CUSTOMER)
+                if cust_col and 'date' in df.columns and 'revenue' in df.columns:
+                    fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+                    fig.suptitle('Customer Analysis', fontsize=16, weight='bold')
+
+                    # Top customers
+                    top_c = self._safe_group(cust_col, 15)
+                    if not top_c.empty:
+                        axes[0].barh(top_c[cust_col], top_c['revenue'],
+                                     color='#ec4899', alpha=0.8)
+                        axes[0].set_title('Top 15 Customer by Revenue')
+                        axes[0].set_xlabel('Revenue (Rp)')
+
+                    # RFM recency histogram
+                    now = df['date'].max()
+                    rfm = df.groupby(cust_col).agg(
+                        recency=('date', lambda x: (now - x.max()).days),
+                        frequency=('revenue', 'count'),
+                        monetary=('revenue', 'sum')
+                    ).reset_index()
+                    axes[1].hist(rfm['recency'], bins=20, color='#38bdf8', alpha=0.8)
+                    axes[1].set_title('Distribusi Recency Customer (hari)')
+                    axes[1].set_xlabel('Hari sejak transaksi terakhir')
+                    axes[1].set_ylabel('Jumlah Customer')
+
+                    plt.tight_layout()
+                    pdf.savefig(fig, bbox_inches='tight')
+                    plt.close()
+            except Exception as e:
+                logger.warning(f"PDF page 6 error: {e}")
+                plt.close('all')
+
+            # ── PAGE 7: WEEKLY & MONTHLY PATTERN ─────────────────────────
+            try:
+                fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+                fig.suptitle('Pola Waktu Penjualan', fontsize=16, weight='bold')
+
+                if 'date' in df.columns:
+                    # Day of week
+                    dow = df.copy()
+                    dow['day'] = dow['date'].dt.day_name()
+                    day_order = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+                    dow_g = dow.groupby('day')['revenue'].mean().reindex(day_order)
+                    axes[0].bar(dow_g.index, dow_g.values, color='#06b6d4', alpha=0.8)
+                    axes[0].set_title('Rata-rata Revenue per Hari')
+                    axes[0].tick_params(axis='x', rotation=45)
+                    axes[0].set_ylabel('Avg Revenue (Rp)')
+
+                    # Month
+                    mon_g = df.groupby(df['date'].dt.month)['revenue'].mean()
+                    month_names = ['Jan','Feb','Mar','Apr','May','Jun',
+                                   'Jul','Aug','Sep','Oct','Nov','Dec']
+                    axes[1].bar([month_names[m-1] for m in mon_g.index],
+                                mon_g.values, color='#10b981', alpha=0.8)
+                    axes[1].set_title('Rata-rata Revenue per Bulan')
+                    axes[1].set_ylabel('Avg Revenue (Rp)')
+
+                plt.tight_layout()
+                pdf.savefig(fig, bbox_inches='tight')
+                plt.close()
+            except Exception as e:
+                logger.warning(f"PDF page 7 error: {e}")
+                plt.close('all')
+
+            # ── PAGE 8: FORECAST ──────────────────────────────────────────
             if forecast_df is not None and not forecast_df.empty:
-                fig, ax = plt.subplots(figsize=(16, 8))
-                
-                # Historical
-                daily = self.analyzer.df.groupby(self.analyzer.df['date'].dt.date)['revenue'].sum()
-                ax.plot(daily.index, daily.values, label='Historical', linewidth=2)
-                
-                # Forecast
-                if 'date' in forecast_df.columns and 'forecast' in forecast_df.columns:
-                    ax.plot(forecast_df['date'], forecast_df['forecast'], 
-                           label='Forecast', linewidth=2, linestyle='--', color='red')
-                
-                ax.set_title('Sales Forecast', fontsize=16, weight='bold')
-                ax.set_xlabel('Date')
-                ax.set_ylabel('Revenue')
-                ax.legend()
-                ax.tick_params(axis='x', rotation=45)
-                
-                pdf.savefig(fig, bbox_inches='tight')
-                plt.close()
-            
-            # Page 4: Segmentation (if available)
-            if segments_df is not None and not segments_df.empty:
-                fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-                
-                # Segment distribution
-                segment_counts = segments_df['segment'].value_counts()
-                axes[0].pie(segment_counts.values, labels=segment_counts.index, autopct='%1.1f%%')
-                axes[0].set_title('Product Segment Distribution', fontsize=14, weight='bold')
-                
-                # Segment performance
-                segment_perf = segments_df.groupby('segment')['total_revenue'].sum()
-                axes[1].bar(segment_perf.index, segment_perf.values)
-                axes[1].set_title('Revenue by Segment', fontsize=14, weight='bold')
-                axes[1].set_ylabel('Revenue')
-                axes[1].tick_params(axis='x', rotation=45)
-                
-                pdf.savefig(fig, bbox_inches='tight')
-                plt.close()
-            
-            # Page 5: Anomalies (if available)
+                try:
+                    fig, ax = plt.subplots(figsize=(16, 7))
+                    daily = df.groupby(df['date'].dt.date)['revenue'].sum()
+                    ax.plot(daily.index, daily.values, label='Historical',
+                            color='#06b6d4', linewidth=1.5)
+                    if 'date' in forecast_df.columns and 'forecast' in forecast_df.columns:
+                        ax.plot(forecast_df['date'], forecast_df['forecast'],
+                                label='Forecast', color='#f59e0b',
+                                linewidth=2, linestyle='--')
+                    ax.set_title('Sales Forecast vs Historical', fontsize=14, weight='bold')
+                    ax.set_xlabel('Date')
+                    ax.set_ylabel('Revenue (Rp)')
+                    ax.legend()
+                    ax.tick_params(axis='x', rotation=45)
+                    plt.tight_layout()
+                    pdf.savefig(fig, bbox_inches='tight')
+                    plt.close()
+                except Exception as e:
+                    logger.warning(f"PDF forecast page error: {e}")
+                    plt.close('all')
+
+            # ── PAGE 9: ANOMALY ───────────────────────────────────────────
             if anomaly_df is not None and not anomaly_df.empty:
-                fig, ax = plt.subplots(figsize=(16, 8))
-                
-                # Plot all data
-                normal = anomaly_df[anomaly_df['anomaly'] == 0]
-                anomalies = anomaly_df[anomaly_df['anomaly'] == 1]
-                
-                ax.scatter(normal['date'], normal['revenue'], c='blue', alpha=0.5, label='Normal')
-                ax.scatter(anomalies['date'], anomalies['revenue'], c='red', s=100, label='Anomaly')
-                
-                ax.set_title('Anomaly Detection', fontsize=16, weight='bold')
-                ax.set_xlabel('Date')
-                ax.set_ylabel('Revenue')
-                ax.legend()
-                ax.tick_params(axis='x', rotation=45)
-                
-                pdf.savefig(fig, bbox_inches='tight')
-                plt.close()
-        
-        logger.info(f"PDF report saved to {output_path}")
-    
+                try:
+                    fig, ax = plt.subplots(figsize=(16, 7))
+                    # detect anomaly flag column (berbeda-beda namanya)
+                    flag_col = next((c for c in ['anomaly','is_anomaly','label'] 
+                                     if c in anomaly_df.columns), None)
+                    if flag_col and 'date' in anomaly_df.columns and 'revenue' in anomaly_df.columns:
+                        normal    = anomaly_df[anomaly_df[flag_col] == 0]
+                        anomalies = anomaly_df[anomaly_df[flag_col] == 1]
+                        ax.scatter(normal['date'], normal['revenue'],
+                                   c='#06b6d4', alpha=0.4, s=15, label='Normal')
+                        ax.scatter(anomalies['date'], anomalies['revenue'],
+                                   c='#ef4444', s=80, label='Anomaly', zorder=5)
+                    else:
+                        # fallback: plot semua as scatter
+                        if 'date' in anomaly_df.columns and 'revenue' in anomaly_df.columns:
+                            ax.scatter(anomaly_df['date'], anomaly_df['revenue'],
+                                       c='#06b6d4', alpha=0.5, s=15)
+                    ax.set_title('Anomaly Detection Results', fontsize=14, weight='bold')
+                    ax.set_xlabel('Date')
+                    ax.set_ylabel('Revenue (Rp)')
+                    ax.legend()
+                    ax.tick_params(axis='x', rotation=45)
+                    plt.tight_layout()
+                    pdf.savefig(fig, bbox_inches='tight')
+                    plt.close()
+                except Exception as e:
+                    logger.warning(f"PDF anomaly page error: {e}")
+                    plt.close('all')
+
+            # ── PAGE 10: SEGMENTATION ─────────────────────────────────────
+            if segments_df is not None and not segments_df.empty:
+                try:
+                    fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+                    fig.suptitle('Product Segmentation', fontsize=16, weight='bold')
+
+                    if 'segment' in segments_df.columns:
+                        seg_counts = segments_df['segment'].value_counts()
+                        axes[0].pie(seg_counts.values, labels=seg_counts.index,
+                                    autopct='%1.1f%%', colors=COLORS_MPL[:len(seg_counts)])
+                        axes[0].set_title('Distribusi Segment')
+
+                        rev_col = next((c for c in ['total_revenue','revenue'] 
+                                        if c in segments_df.columns), None)
+                        if rev_col:
+                            seg_rev = segments_df.groupby('segment')[rev_col].sum()
+                            axes[1].bar(seg_rev.index, seg_rev.values,
+                                        color=COLORS_MPL[:len(seg_rev)], alpha=0.8)
+                            axes[1].set_title('Revenue by Segment')
+                            axes[1].set_ylabel('Revenue (Rp)')
+                            axes[1].tick_params(axis='x', rotation=45)
+
+                    plt.tight_layout()
+                    pdf.savefig(fig, bbox_inches='tight')
+                    plt.close()
+                except Exception as e:
+                    logger.warning(f"PDF segmentation page error: {e}")
+                    plt.close('all')
+
+        logger.info(f"PDF report saved: {output_path}")
+
+    # ── EXCEL ────────────────────────────────────────────────────────────────
     def export_to_excel(self, output_path: str = 'reports/sales_analysis.xlsx',
-                       forecast_df: Optional[pd.DataFrame] = None,
-                       segments_df: Optional[pd.DataFrame] = None,
-                       anomaly_df: Optional[pd.DataFrame] = None):
-        """
-        Export hasil analisis ke Excel
-        
-        Parameters:
-        -----------
-        output_path : str
-            Path untuk menyimpan Excel
-        forecast_df : pd.DataFrame, optional
-            DataFrame forecast
-        segments_df : pd.DataFrame, optional
-            DataFrame segmentasi
-        anomaly_df : pd.DataFrame, optional
-            DataFrame anomaly detection
-        """
+                        forecast_df: Optional[pd.DataFrame] = None,
+                        segments_df: Optional[pd.DataFrame] = None,
+                        anomaly_df: Optional[pd.DataFrame] = None):
+        """Export hasil analisis lengkap ke Excel — semua sheet dashboard."""
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        
+        df = self.analyzer.df
+
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-            # Raw data
-            self.analyzer.df.to_excel(writer, sheet_name='Raw Data', index=False)
-            
+
+            def safe_sheet(data, sheet_name):
+                try:
+                    if data is not None and not (isinstance(data, pd.DataFrame) and data.empty):
+                        if isinstance(data, dict):
+                            data = pd.DataFrame(list(data.items()), columns=['Metric','Value'])
+                        data.to_excel(writer, sheet_name=sheet_name[:31], index=False)
+                except Exception as e:
+                    logger.warning(f"Excel sheet '{sheet_name}' error: {e}")
+
+            # Raw Data
+            safe_sheet(df, 'Raw Data')
+
             # KPIs
-            kpis = self.analyzer.calculate_kpis()
-            kpi_df = pd.DataFrame(list(kpis.items()), columns=['KPI', 'Value'])
-            kpi_df.to_excel(writer, sheet_name='KPIs', index=False)
-            
-            # Monthly growth
-            monthly = self.analyzer.calculate_growth_metrics()
-            if not monthly.empty:
-                monthly.to_excel(writer, sheet_name='Monthly Growth', index=False)
-            
-            # Top products
-            top_products = self.analyzer.get_top_products(n=20)
-            if not top_products.empty:
-                top_products.to_excel(writer, sheet_name='Top Products', index=False)
-            
-            # Category analysis
-            categories = self.analyzer.get_category_analysis()
-            if not categories.empty:
-                categories.to_excel(writer, sheet_name='Category Analysis', index=False)
-            
-            # Declining products
-            declining = self.analyzer.get_declining_products()
-            if not declining.empty:
-                declining.to_excel(writer, sheet_name='Declining Products', index=False)
-            
-            # Forecast
+            safe_sheet(self.analyzer.calculate_kpis(), 'KPIs')
+
+            # Monthly Growth
+            safe_sheet(self.analyzer.calculate_growth_metrics(), 'Monthly Growth')
+
+            # Top Products
+            prod_col = self._col(self._COL_PRODUCT)
+            if prod_col:
+                if prod_col != 'product' and 'product' not in df.columns:
+                    self.analyzer.df['product'] = df[prod_col]
+                safe_sheet(self.analyzer.get_top_products(n=30), 'Top Products')
+
+            # Category - inject cat_col dulu ke analyzer df jika perlu
+            cat_col = self._col(self._COL_CATEGORY)
+            if cat_col and cat_col != 'category' and 'category' not in df.columns:
+                self.analyzer.df['category'] = df[cat_col]
+            safe_sheet(self.analyzer.get_category_analysis(), 'Category Analysis')
+
+            # Declining Products
+            safe_sheet(self.analyzer.get_declining_products(), 'Declining Products')
+
+            # Salesperson
+            sp_col = self._col(self._COL_SALES)
+            if sp_col:
+                sp = df.groupby(sp_col).agg(
+                    revenue=('revenue','sum'),
+                    transaksi=('revenue','count')
+                ).reset_index().sort_values('revenue', ascending=False)
+                sp['avg_revenue'] = sp['revenue'] / sp['transaksi']
+                safe_sheet(sp, 'Salesperson Performance')
+
+            # Regional
+            reg_col = self._col(self._COL_REGION)
+            if reg_col:
+                rg = df.groupby(reg_col).agg(
+                    revenue=('revenue','sum'),
+                    transaksi=('revenue','count')
+                ).reset_index().sort_values('revenue', ascending=False)
+                rg['revenue_share_pct'] = rg['revenue'] / rg['revenue'].sum() * 100
+                safe_sheet(rg, 'Regional Analysis')
+
+            # Store
+            store_col = self._col(self._COL_STORE)
+            if store_col:
+                st_g = df.groupby(store_col).agg(
+                    revenue=('revenue','sum'),
+                    transaksi=('revenue','count')
+                ).reset_index().sort_values('revenue', ascending=False)
+                safe_sheet(st_g, 'Store Analysis')
+
+            # Channel
+            ch_col = self._col(self._COL_CHANNEL)
+            if ch_col:
+                ch = df.groupby(ch_col).agg(
+                    revenue=('revenue','sum'),
+                    transaksi=('revenue','count')
+                ).reset_index().sort_values('revenue', ascending=False)
+                safe_sheet(ch, 'Channel Analysis')
+
+            # Customer RFM
+            cust_col = self._col(self._COL_CUSTOMER)
+            if cust_col and 'date' in df.columns:
+                try:
+                    now = df['date'].max()
+                    rfm = df.groupby(cust_col).agg(
+                        recency=('date', lambda x: (now - x.max()).days),
+                        frequency=('revenue','count'),
+                        monetary=('revenue','sum')
+                    ).reset_index()
+                    rfm['avg_order'] = rfm['monetary'] / rfm['frequency']
+                    rfm = rfm.sort_values('monetary', ascending=False)
+                    safe_sheet(rfm, 'Customer RFM')
+                except Exception as e:
+                    logger.warning(f"RFM sheet error: {e}")
+
+            # Profitability
+            cost_col = self._col(self._COL_COST)
+            if cost_col and prod_col:
+                try:
+                    prof = df.groupby(prod_col).agg(
+                        revenue=('revenue','sum'),
+                        cost=(cost_col,'sum')
+                    ).reset_index()
+                    prof['profit'] = prof['revenue'] - prof['cost']
+                    prof['margin_pct'] = prof['profit'] / prof['revenue'] * 100
+                    safe_sheet(prof.sort_values('profit', ascending=False), 'Profitability')
+                except Exception as e:
+                    logger.warning(f"Profitability sheet error: {e}")
+
+            # Forecast / Segments / Anomalies
             if forecast_df is not None and not forecast_df.empty:
-                forecast_df.to_excel(writer, sheet_name='Forecast', index=False)
-            
-            # Segments
+                safe_sheet(forecast_df, 'Forecast')
             if segments_df is not None and not segments_df.empty:
-                segments_df.to_excel(writer, sheet_name='Product Segments', index=False)
-            
-            # Anomalies
+                safe_sheet(segments_df, 'Product Segments')
             if anomaly_df is not None and not anomaly_df.empty:
-                anomalies = anomaly_df[anomaly_df['anomaly'] == 1]
-                if not anomalies.empty:
-                    anomalies.to_excel(writer, sheet_name='Anomalies', index=False)
-        
-        logger.info(f"Excel report saved to {output_path}")
-    
+                flag_col = next((c for c in ['anomaly','is_anomaly'] 
+                                 if c in anomaly_df.columns), None)
+                if flag_col:
+                    anom_only = anomaly_df[anomaly_df[flag_col] == 1]
+                    if not anom_only.empty:
+                        safe_sheet(anom_only, 'Anomalies')
+                else:
+                    safe_sheet(anomaly_df, 'Anomalies')
+
+        logger.info(f"Excel report saved: {output_path}")
+
+    # ── CSV ──────────────────────────────────────────────────────────────────
     def export_to_csv(self, output_dir: str = 'reports'):
-        """
-        Export hasil analisis ke multiple CSV files
-        
-        Parameters:
-        -----------
-        output_dir : str
-            Directory untuk menyimpan CSV
-        """
+        """Export semua analisis ke CSV terpisah."""
         Path(output_dir).mkdir(parents=True, exist_ok=True)
-        
-        # KPIs
-        kpis = self.analyzer.calculate_kpis()
-        pd.DataFrame([kpis]).to_csv(f'{output_dir}/kpis.csv', index=False)
-        
-        # Monthly growth
-        monthly = self.analyzer.calculate_growth_metrics()
-        if not monthly.empty:
-            monthly.to_csv(f'{output_dir}/monthly_growth.csv', index=False)
-        
-        # Top products
-        top_products = self.analyzer.get_top_products(n=20)
-        if not top_products.empty:
-            top_products.to_csv(f'{output_dir}/top_products.csv', index=False)
-        
-        # Category analysis
-        categories = self.analyzer.get_category_analysis()
-        if not categories.empty:
-            categories.to_csv(f'{output_dir}/category_analysis.csv', index=False)
-        
-        logger.info(f"CSV files saved to {output_dir}")
+        df = self.analyzer.df
+
+        def safe_csv(data, filename):
+            try:
+                if data is not None and not (isinstance(data, pd.DataFrame) and data.empty):
+                    if isinstance(data, dict):
+                        data = pd.DataFrame(list(data.items()), columns=['Metric','Value'])
+                    data.to_csv(f'{output_dir}/{filename}', index=False)
+                    logger.info(f"CSV saved: {filename}")
+            except Exception as e:
+                logger.warning(f"CSV '{filename}' error: {e}")
+
+        safe_csv(self.analyzer.calculate_kpis(),         'kpis.csv')
+        safe_csv(self.analyzer.calculate_growth_metrics(),'monthly_growth.csv')
+        cat_col = self._col(self._COL_CATEGORY)
+        if cat_col and cat_col != 'category' and 'category' not in df.columns:
+            self.analyzer.df['category'] = df[cat_col]
+        safe_csv(self.analyzer.get_category_analysis(), 'category_analysis.csv')
+        safe_csv(self.analyzer.get_declining_products(),  'declining_products.csv')
+
+        prod_col = self._col(self._COL_PRODUCT)
+        if prod_col:
+            safe_csv(self._safe_group(prod_col, 30), 'top_products.csv')
+
+        sp_col = self._col(self._COL_SALES)
+        if sp_col:
+            sp = df.groupby(sp_col).agg(
+                revenue=('revenue','sum'), transaksi=('revenue','count')
+            ).reset_index().sort_values('revenue', ascending=False)
+            safe_csv(sp, 'salesperson_performance.csv')
+
+        reg_col = self._col(self._COL_REGION)
+        if reg_col:
+            rg = df.groupby(reg_col).agg(
+                revenue=('revenue','sum'), transaksi=('revenue','count')
+            ).reset_index().sort_values('revenue', ascending=False)
+            safe_csv(rg, 'regional_analysis.csv')
+
+        store_col = self._col(self._COL_STORE)
+        if store_col:
+            st_g = df.groupby(store_col).agg(
+                revenue=('revenue','sum'), transaksi=('revenue','count')
+            ).reset_index().sort_values('revenue', ascending=False)
+            safe_csv(st_g, 'store_analysis.csv')
+
+        ch_col = self._col(self._COL_CHANNEL)
+        if ch_col:
+            ch = df.groupby(ch_col).agg(
+                revenue=('revenue','sum'), transaksi=('revenue','count')
+            ).reset_index().sort_values('revenue', ascending=False)
+            safe_csv(ch, 'channel_analysis.csv')
+
+        cust_col = self._col(self._COL_CUSTOMER)
+        if cust_col and 'date' in df.columns:
+            try:
+                now = df['date'].max()
+                rfm = df.groupby(cust_col).agg(
+                    recency=('date', lambda x: (now - x.max()).days),
+                    frequency=('revenue','count'),
+                    monetary=('revenue','sum')
+                ).reset_index().sort_values('monetary', ascending=False)
+                safe_csv(rfm, 'customer_rfm.csv')
+            except Exception as e:
+                logger.warning(f"Customer RFM CSV error: {e}")
+
+        cost_col = self._col(self._COL_COST)
+        if cost_col and prod_col:
+            try:
+                prof = df.groupby(prod_col).agg(
+                    revenue=('revenue','sum'), cost=(cost_col,'sum')
+                ).reset_index()
+                prof['profit']     = prof['revenue'] - prof['cost']
+                prof['margin_pct'] = prof['profit'] / prof['revenue'] * 100
+                safe_csv(prof.sort_values('profit', ascending=False), 'profitability.csv')
+            except Exception as e:
+                logger.warning(f"Profitability CSV error: {e}")
+
+        logger.info(f"CSV export complete → {output_dir}")
 
 
 class Visualizer:
