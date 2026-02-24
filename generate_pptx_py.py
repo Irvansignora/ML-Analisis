@@ -219,11 +219,138 @@ def insight_row(slide, prs, text: str, x, y, w):
                  font_size=9, color_hex=P['text'], wrap=True)
 
 
+def _apply_chart_theme(chart, chart_frame, values=None):
+    """Apply dark theme + readable fonts to any chart. Shared by all chart types.
+    chart = Chart object, chart_frame = GraphicFrame (parent shape)
+    """
+    from pptx.oxml.ns import qn
+    import lxml.etree as etree
+
+    # Background — access via chart directly
+    try:
+        chart.chart_area.format.fill.solid()
+        chart.chart_area.format.fill.fore_color.rgb = rgb(P['card'])
+        chart.plot_area.format.fill.solid()
+        chart.plot_area.format.fill.fore_color.rgb = rgb(P['card'])
+    except Exception:
+        try:
+            # fallback via chart_frame if chart is actually GraphicFrame
+            chart_frame.chart.chart_area.format.fill.solid()
+            chart_frame.chart.chart_area.format.fill.fore_color.rgb = rgb(P['card'])
+        except Exception:
+            pass
+
+    # Kill chart title
+    try:
+        chart.has_title = False
+    except Exception:
+        pass
+    try:
+        chart_elem = chart._element
+        for title_elem in chart_elem.findall('.//' + qn('c:title')):
+            title_elem.getparent().remove(title_elem)
+    except Exception:
+        pass
+
+    # Axis tick labels — small, muted
+    for axis_attr in ['category_axis', 'value_axis']:
+        try:
+            axis = getattr(chart, axis_attr)
+            axis.tick_labels.font.color.rgb = rgb(P['muted'])
+            axis.tick_labels.font.size = Pt(7)
+        except Exception:
+            pass
+
+    # Gridlines — subtle
+    try:
+        chart.value_axis.major_gridlines.format.line.color.rgb = rgb(P['border'])
+    except Exception:
+        pass
+
+    # Legend off
+    try:
+        chart.has_legend = False
+    except Exception:
+        pass
+
+    # Data labels — disable entirely via XML
+    try:
+        chart_elem = chart._element
+        for dlbls in chart_elem.iter(qn('c:dLbls')):
+            for sv in dlbls.findall(qn('c:showVal')):
+                sv.set('val', '0')
+            for sc in dlbls.findall(qn('c:showCatName')):
+                sc.set('val', '0')
+            for sp in dlbls.findall(qn('c:showPercent')):
+                sp.set('val', '0')
+    except Exception:
+        pass
+
+    # Format value axis numbers (shorten big numbers like 200000000 → 200Jt)
+    # Must inject numFmt directly into valAx XML
+    if values:
+        try:
+            from pptx.oxml.ns import qn as _qn
+            import lxml.etree as _etree
+            max_val = max(abs(float(v)) for v in values if v is not None) if values else 1
+            if max_val >= 1e9:
+                fmt = '#,##0,,,"M"'
+            elif max_val >= 1e6:
+                fmt = '#,##0,,"Jt"'
+            elif max_val >= 1e3:
+                fmt = '#,##0,"K"'
+            else:
+                fmt = '#,##0.#'
+
+            chart_elem = chart._element
+            for valAx in chart_elem.iter(_qn('c:valAx')):
+                # Remove existing numFmt if any
+                for nf in valAx.findall(_qn('c:numFmt')):
+                    valAx.remove(nf)
+                # Create and insert numFmt at position 4 (after axPos)
+                numFmt = _etree.Element(_qn('c:numFmt'))
+                numFmt.set('formatCode', fmt)
+                numFmt.set('sourceLinked', '0')
+                valAx.insert(4, numFmt)
+        except Exception:
+            pass
+
+    # Delete chart title: set autoTitleDeleted=1 and remove any c:title
+    try:
+        from pptx.oxml.ns import qn as _qn
+        chart_elem = chart._element  # this is c:chartSpace
+        c_chart = chart_elem.find(_qn('c:chart'))  # c:chart is child of chartSpace
+        if c_chart is not None:
+            atd = c_chart.find(_qn('c:autoTitleDeleted'))
+            if atd is not None:
+                atd.set('val', '1')
+            else:
+                import lxml.etree as _etree
+                atd = _etree.SubElement(c_chart, _qn('c:autoTitleDeleted'))
+                atd.set('val', '1')
+                c_chart.insert(0, atd)
+            for title in c_chart.findall(_qn('c:title')):
+                c_chart.remove(title)
+    except Exception:
+        pass
+
+    # Remove legend via XML from c:chart
+    try:
+        from pptx.oxml.ns import qn as _qn
+        chart_elem = chart._element
+        c_chart = chart_elem.find(_qn('c:chart'))
+        if c_chart is not None:
+            for leg in c_chart.findall(_qn('c:legend')):
+                c_chart.remove(leg)
+    except Exception:
+        pass
+
+
 def add_bar_chart(slide, labels: list, values: list,
                   x, y, w, h,
                   colors: list,
                   chart_type=XL_CHART_TYPE.BAR_CLUSTERED,
-                  series_name: str = "Value"):
+                  series_name: str = ""):
     """Add a bar or column chart."""
     chart_data = ChartData()
     chart_data.categories = [str(l) for l in labels]
@@ -234,43 +361,14 @@ def add_bar_chart(slide, labels: list, values: list,
     )
     chart = chart_frame.chart
 
-    # Style
+    # Color each bar/column point
     plot = chart.plots[0]
     for idx, point in enumerate(plot.series[0].points):
         c = colors[idx % len(colors)]
         point.format.fill.solid()
         point.format.fill.fore_color.rgb = rgb(c)
 
-    # Background
-    chart_frame.chart.chart_area.format.fill.solid()
-    chart_frame.chart.chart_area.format.fill.fore_color.rgb = rgb(P['card'])
-    chart_frame.chart.plot_area.format.fill.solid()
-    chart_frame.chart.plot_area.format.fill.fore_color.rgb = rgb(P['card'])
-
-    # Axes
-    try:
-        chart.category_axis.tick_labels.font.color.rgb = rgb(P['muted'])
-        chart.category_axis.tick_labels.font.size = Pt(7)
-        chart.value_axis.tick_labels.font.color.rgb = rgb(P['muted'])
-        chart.value_axis.tick_labels.font.size = Pt(7)
-    except Exception:
-        pass
-
-    # Data labels — disable to avoid oversized black labels
-    try:
-        plot.series[0].data_labels.showValue = False
-    except Exception:
-        pass
-    try:
-        chart.plots[0].has_data_labels = False
-    except Exception:
-        pass
-
-    # Legend off
-    try:
-        chart.has_legend = False
-    except Exception:
-        pass
+    _apply_chart_theme(chart, chart_frame, values)
 
     return chart_frame
 
@@ -278,16 +376,12 @@ def add_bar_chart(slide, labels: list, values: list,
 def add_line_chart(slide, labels: list, values: list, x, y, w, h, color_hex: str):
     chart_data = ChartData()
     chart_data.categories = [str(l) for l in labels]
-    chart_data.add_series("MoM %", [float(v) for v in values])
+    chart_data.add_series("", [float(v) for v in values])
 
     chart_frame = slide.shapes.add_chart(
         XL_CHART_TYPE.LINE, i(x), i(y), i(w), i(h), chart_data
     )
     chart = chart_frame.chart
-    chart.chart_area.format.fill.solid()
-    chart.chart_area.format.fill.fore_color.rgb = rgb(P['card'])
-    chart.plot_area.format.fill.solid()
-    chart.plot_area.format.fill.fore_color.rgb = rgb(P['card'])
 
     try:
         series = chart.plots[0].series[0]
@@ -295,42 +389,20 @@ def add_line_chart(slide, labels: list, values: list, x, y, w, h, color_hex: str
         series.format.line.width = Pt(2)
     except Exception:
         pass
-    try:
-        chart.has_legend = False
-    except Exception:
-        pass
-    try:
-        chart.category_axis.tick_labels.font.color.rgb = rgb(P['muted'])
-        chart.category_axis.tick_labels.font.size = Pt(7)
-        chart.value_axis.tick_labels.font.color.rgb = rgb(P['muted'])
-        chart.value_axis.tick_labels.font.size = Pt(7)
-    except Exception:
-        pass
-    # Disable data labels
-    try:
-        chart.plots[0].series[0].data_labels.showValue = False
-    except Exception:
-        pass
-    try:
-        chart.plots[0].has_data_labels = False
-    except Exception:
-        pass
+
+    _apply_chart_theme(chart, chart_frame, values)
     return chart_frame
 
 
 def add_doughnut_chart(slide, labels: list, values: list, x, y, w, h, colors: list):
     chart_data = ChartData()
     chart_data.categories = [str(l) for l in labels]
-    chart_data.add_series("Customers", [float(v) for v in values])
+    chart_data.add_series("", [float(v) for v in values])
 
     chart_frame = slide.shapes.add_chart(
         XL_CHART_TYPE.DOUGHNUT, i(x), i(y), i(w), i(h), chart_data
     )
     chart = chart_frame.chart
-    chart.chart_area.format.fill.solid()
-    chart.chart_area.format.fill.fore_color.rgb = rgb(P['card'])
-    chart.plot_area.format.fill.solid()
-    chart.plot_area.format.fill.fore_color.rgb = rgb(P['card'])
 
     try:
         for idx, point in enumerate(chart.plots[0].series[0].points):
@@ -340,21 +412,13 @@ def add_doughnut_chart(slide, labels: list, values: list, x, y, w, h, colors: li
     except Exception:
         pass
 
+    _apply_chart_theme(chart, chart_frame)
+
+    # Re-enable legend for doughnut only
     try:
         chart.has_legend = True
         chart.legend.font.color.rgb = rgb(P['text'])
         chart.legend.font.size = Pt(8)
-    except Exception:
-        pass
-
-    # Disable data labels to avoid oversized black labels
-    try:
-        chart.plots[0].has_data_labels = False
-    except Exception:
-        pass
-    try:
-        chart.plots[0].series[0].data_labels.showValue = False
-        chart.plots[0].series[0].data_labels.showCategoryName = False
     except Exception:
         pass
 
@@ -501,18 +565,18 @@ def slide_trend(prs, data: dict):
 
     sec_label(slide, prs, "Revenue Bulanan", 0.3, 0.82, 9.4)
     try:
-        add_bar_chart(slide, labels, revenues, 0.3, 1.1, 9.4, 2.5,
+        add_bar_chart(slide, labels, revenues, 0.3, 1.08, 9.4, 2.2,
                       P['chart_blues'], XL_CHART_TYPE.COLUMN_CLUSTERED,
-                      "Revenue")
+                      "")
     except Exception:
         pass
 
     mom_vals   = [round(safe(t.get('revenue_mom', 0), 0), 1) for t in trend[1:]]
     mom_labels = labels[1:]
     if len(mom_vals) > 1:
-        sec_label(slide, prs, "MoM Growth (%)", 0.3, 3.72, 9.4)
+        sec_label(slide, prs, "MoM Growth (%)", 0.3, 3.4, 9.4)
         try:
-            add_line_chart(slide, mom_labels, mom_vals, 0.3, 3.98, 9.4, 1.1, P['amber'])
+            add_line_chart(slide, mom_labels, mom_vals, 0.3, 3.65, 9.4, 1.45, P['amber'])
         except Exception:
             pass
 
