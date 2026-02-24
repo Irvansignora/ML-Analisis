@@ -322,12 +322,15 @@ def render_sidebar():
 
         st.markdown("")
         if st.button("📥 Load Sample Data"):
-            with st.spinner("Generate sample..."):
-                df = create_sample_data(n_records=1000)
-                st.session_state.df       = df
-                st.session_state.analyzer = SalesAnalyzer(df)
+            with st.spinner("Generate sample data..."):
+                raw = create_sample_data(n_records=3000)
+                pp  = DataPreprocessor()
+                df  = pp.preprocess(raw)
+                st.session_state.df          = df
+                st.session_state.preprocessor= pp
+                st.session_state.analyzer    = SalesAnalyzer(df)
                 st.session_state.df_filtered = None
-                st.success("Sample data loaded!")
+                st.success(f"✅ {len(df):,} records sample data loaded!")
                 st.rerun()
 
         st.markdown("---")
@@ -825,11 +828,19 @@ def tab_growth():
     freq_label = "Minggu" if period_type == "Mingguan" else "Bulan"
 
     if growth_dim == "Produk":
-        dim_col = next((c for c in ['product','produk'] if c in df.columns), None)
+        dim_col = next((c for c in [
+            'product','produk','nama_produk','item','barang','nama_barang'
+        ] if c in df.columns), None)
     elif growth_dim == "Salesperson":
-        dim_col = next((c for c in ['salesperson','sales_person','sales','nama_sales','agen','agent','pic'] if c in df.columns), None)
-    else:
-        dim_col = next((c for c in ['region','wilayah','cabang','kota','area','store','nama_toko'] if c in df.columns), None)
+        dim_col = next((c for c in [
+            'salesperson','sales_person','sales','nama_sales','sales_name',
+            'agen','agent','pic','nama_agen'
+        ] if c in df.columns), None)
+    else:  # Regional / Store
+        dim_col = next((c for c in [
+            'region','wilayah','kota','city','provinsi','province',
+            'cabang','branch','area','store','nama_toko','nama_cabang'
+        ] if c in df.columns), None)
 
     if not dim_col:
         st.warning(f"⚠️ Kolom untuk **{growth_dim}** tidak ditemukan di dataset.")
@@ -865,15 +876,28 @@ def tab_growth():
         grp['date'] = grp['date'].dt.to_timestamp()
         periods_sorted = sorted(grp['date'].unique())
 
+        # Ambil top_n dimensi berdasarkan TOTAL revenue (bukan cuma periode terakhir)
+        # → fix bug: kalau data tipis di periode terakhir, banyak yang curr=0
+        top_dims = (grp.groupby(dim_col)['revenue'].sum()
+                       .nlargest(top_n).index.tolist())
+        grp_top  = grp[grp[dim_col].isin(top_dims)]
+
         if len(periods_sorted) >= 2:
             prev_period = periods_sorted[-2]
             curr_period = periods_sorted[-1]
-            prev_df = grp[grp['date']==prev_period][[dim_col,'revenue']].rename(columns={'revenue':'prev'})
-            curr_df = grp[grp['date']==curr_period][[dim_col,'revenue']].rename(columns={'revenue':'curr'})
-            merged  = curr_df.merge(prev_df, on=dim_col, how='left').fillna(0)
-            merged['growth_pct'] = np.where(merged['prev']>0,
-                (merged['curr']-merged['prev'])/merged['prev']*100, 100.0)
-            merged = merged.sort_values('curr', ascending=False).head(top_n)
+            prev_df = grp_top[grp_top['date']==prev_period][[dim_col,'revenue']].rename(columns={'revenue':'prev'})
+            curr_df = grp_top[grp_top['date']==curr_period][[dim_col,'revenue']].rename(columns={'revenue':'curr'})
+            # outer join: pastikan semua top_dims masuk walau tidak ada transaksi di salah satu periode
+            merged  = pd.DataFrame({dim_col: top_dims})
+            merged  = merged.merge(curr_df, on=dim_col, how='left')
+            merged  = merged.merge(prev_df, on=dim_col, how='left')
+            merged  = merged.fillna(0)
+            merged['growth_pct'] = np.where(
+                merged['prev'] > 0,
+                (merged['curr'] - merged['prev']) / merged['prev'] * 100,
+                np.where(merged['curr'] > 0, 100.0, 0.0)
+            )
+            merged = merged.sort_values('curr', ascending=False)
 
             c1, c2 = st.columns(2)
             with c1:
