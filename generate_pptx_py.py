@@ -219,12 +219,93 @@ def insight_row(slide, prs, text: str, x, y, w):
                  font_size=9, color_hex=P['text'], wrap=True)
 
 
+def _fix_chart_dark_theme(chart_frame):
+    """Force dark Ocean theme onto ALL chart XML — axes, bg, labels, gridlines, runs."""
+    import lxml.etree as etree
+    from pptx.oxml.ns import qn
+
+    el = chart_frame.chart._element
+
+    def set_txPr(parent_el, color_hex, sz):
+        """Recreate txPr/defRPr cleanly with forced color + size."""
+        txPr = parent_el.find(qn('c:txPr'))
+        if txPr is None:
+            txPr = etree.SubElement(parent_el, qn('c:txPr'))
+        if txPr.find(qn('a:bodyPr')) is None:
+            etree.SubElement(txPr, qn('a:bodyPr'))
+        if txPr.find(qn('a:lstStyle')) is None:
+            etree.SubElement(txPr, qn('a:lstStyle'))
+        for old in txPr.findall(qn('a:defRPr')): txPr.remove(old)
+        defRPr = etree.SubElement(txPr, qn('a:defRPr'))
+        defRPr.set('sz', str(sz))
+        defRPr.set('b', '0')
+        sf = etree.SubElement(defRPr, qn('a:solidFill'))
+        sg = etree.SubElement(sf, qn('a:srgbClr'))
+        sg.set('val', color_hex)
+        lat = etree.SubElement(defRPr, qn('a:latin'))
+        lat.set('typeface', 'Calibri')
+
+    # ── Chart area + plot area backgrounds → dark ──
+    for area_tag in [qn('c:chartSpace'), qn('c:plotArea')]:
+        for area in el.findall(f'.//{area_tag}'):
+            spPr = area.find(qn('c:spPr'))
+            if spPr is None:
+                spPr = etree.SubElement(area, qn('c:spPr'))
+            for old in spPr.findall(qn('a:solidFill')): spPr.remove(old)
+            for old in spPr.findall(qn('a:noFill')): spPr.remove(old)
+            sf = etree.SubElement(spPr, qn('a:solidFill'))
+            sg = etree.SubElement(sf, qn('a:srgbClr'))
+            sg.set('val', '071828')
+
+    # ── Axes → 4.5pt muted ──
+    for ax_tag in [qn('c:catAx'), qn('c:valAx'), qn('c:dateAx'), qn('c:serAx')]:
+        for ax in el.findall(f'.//{ax_tag}'):
+            set_txPr(ax, 'E0F2FE', 450)
+
+    # ── Data labels → 4.5pt white ──
+    for dLbls in el.findall(f'.//{qn("c:dLbls")}'):
+        set_txPr(dLbls, 'E0F2FE', 450)
+    for dLbl in el.findall(f'.//{qn("c:dLbl")}'):
+        set_txPr(dLbl, 'E0F2FE', 450)
+
+    # ── Legend → 5.5pt light ──
+    for leg in el.findall(f'.//{qn("c:legend")}'):
+        set_txPr(leg, 'E0F2FE', 650)
+
+    # ── Gridlines → subtle dark ──
+    for gl_tag in [qn('c:majorGridlines'), qn('c:minorGridlines')]:
+        for gl in el.findall(f'.//{gl_tag}'):
+            spPr = gl.find(qn('c:spPr'))
+            if spPr is None:
+                spPr = etree.SubElement(gl, qn('c:spPr'))
+            for old in spPr.findall(qn('a:ln')): spPr.remove(old)
+            ln = etree.SubElement(spPr, qn('a:ln'))
+            sf = etree.SubElement(ln, qn('a:solidFill'))
+            sg = etree.SubElement(sf, qn('a:srgbClr'))
+            sg.set('val', '0D2D45')
+
+    # ── Nuclear: walk ALL <a:r> text runs → force light color + small size ──
+    for r in el.findall(f'.//{qn("a:r")}'):
+        rPr = r.find(qn('a:rPr'))
+        if rPr is None:
+            rPr = etree.SubElement(r, qn('a:rPr'))
+        for sf in rPr.findall(qn('a:solidFill')): rPr.remove(sf)
+        for sc in rPr.findall(qn('a:schemeClr')): rPr.remove(sc)
+        sf = etree.SubElement(rPr, qn('a:solidFill'))
+        sg = etree.SubElement(sf, qn('a:srgbClr'))
+        sg.set('val', 'E0F2FE')
+        cur_sz = rPr.get('sz')
+        if cur_sz is None or int(cur_sz) > 600:
+            rPr.set('sz', '450')
+        rPr.set('b', '0')
+
+
 def add_bar_chart(slide, labels: list, values: list,
                   x, y, w, h,
                   colors: list,
                   chart_type=XL_CHART_TYPE.BAR_CLUSTERED,
                   series_name: str = "Value"):
-    """Add a bar or column chart."""
+    """Add a bar or column chart with full Ocean Dark theme."""
     chart_data = ChartData()
     chart_data.categories = [str(l) for l in labels]
     chart_data.add_series(series_name, [float(v) for v in values])
@@ -234,34 +315,21 @@ def add_bar_chart(slide, labels: list, values: list,
     )
     chart = chart_frame.chart
 
-    # Style
-    plot = chart.plots[0]
-    for idx, point in enumerate(plot.series[0].points):
-        c = colors[idx % len(colors)]
-        point.format.fill.solid()
-        point.format.fill.fore_color.rgb = rgb(c)
-
-    # Background
-    chart_frame.chart.chart_area.format.fill.solid()
-    chart_frame.chart.chart_area.format.fill.fore_color.rgb = rgb(P['card'])
-    chart_frame.chart.plot_area.format.fill.solid()
-    chart_frame.chart.plot_area.format.fill.fore_color.rgb = rgb(P['card'])
-
-    # Axes
+    # Color each bar/column individually
     try:
-        chart.category_axis.tick_labels.font.color.rgb = rgb(P['muted'])
-        chart.category_axis.tick_labels.font.size = Pt(8)
-        chart.value_axis.tick_labels.font.color.rgb = rgb(P['muted'])
-        chart.value_axis.tick_labels.font.size = Pt(8)
+        for idx, point in enumerate(chart.plots[0].series[0].points):
+            c = colors[idx % len(colors)]
+            point.format.fill.solid()
+            point.format.fill.fore_color.rgb = rgb(c)
     except Exception:
         pass
 
-    # Legend off
     try:
         chart.has_legend = False
     except Exception:
         pass
 
+    _fix_chart_dark_theme(chart_frame)
     return chart_frame
 
 
@@ -274,10 +342,6 @@ def add_line_chart(slide, labels: list, values: list, x, y, w, h, color_hex: str
         XL_CHART_TYPE.LINE, i(x), i(y), i(w), i(h), chart_data
     )
     chart = chart_frame.chart
-    chart.chart_area.format.fill.solid()
-    chart.chart_area.format.fill.fore_color.rgb = rgb(P['card'])
-    chart.plot_area.format.fill.solid()
-    chart.plot_area.format.fill.fore_color.rgb = rgb(P['card'])
 
     try:
         series = chart.plots[0].series[0]
@@ -289,11 +353,8 @@ def add_line_chart(slide, labels: list, values: list, x, y, w, h, color_hex: str
         chart.has_legend = False
     except Exception:
         pass
-    try:
-        chart.category_axis.tick_labels.font.color.rgb = rgb(P['muted'])
-        chart.value_axis.tick_labels.font.color.rgb = rgb(P['muted'])
-    except Exception:
-        pass
+
+    _fix_chart_dark_theme(chart_frame)
     return chart_frame
 
 
@@ -306,10 +367,6 @@ def add_doughnut_chart(slide, labels: list, values: list, x, y, w, h, colors: li
         XL_CHART_TYPE.DOUGHNUT, i(x), i(y), i(w), i(h), chart_data
     )
     chart = chart_frame.chart
-    chart.chart_area.format.fill.solid()
-    chart.chart_area.format.fill.fore_color.rgb = rgb(P['card'])
-    chart.plot_area.format.fill.solid()
-    chart.plot_area.format.fill.fore_color.rgb = rgb(P['card'])
 
     try:
         for idx, point in enumerate(chart.plots[0].series[0].points):
@@ -321,11 +378,10 @@ def add_doughnut_chart(slide, labels: list, values: list, x, y, w, h, colors: li
 
     try:
         chart.has_legend = True
-        chart.legend.font.color.rgb = rgb(P['text'])
-        chart.legend.font.size = Pt(9)
     except Exception:
         pass
 
+    _fix_chart_dark_theme(chart_frame)
     return chart_frame
 
 
