@@ -24,56 +24,164 @@ class DataPreprocessor:
     Kelas untuk preprocessing data penjualan
     """
     
-    # Mapping kolom umum untuk standarisasi
+    # ── COLUMN MAPPINGS ──────────────────────────────────────────────────────────
+    # PENTING: urutan dict menentukan prioritas matching.
+    # Kolom yang lebih spesifik (store, customer, region) harus didefinisikan
+    # SEBELUM kolom yang lebih generik (product) agar tidak salah petakan.
+    # Setiap keyword HANYA boleh ada di SATU mapping untuk hindari konflik.
     COLUMN_MAPPINGS = {
-        # Date columns
-        'date': ['date', 'tanggal', 'tgl', 'order_date', 'transaction_date', 'sale_date',
-                 'timestamp', 'waktu', 'tanggal_transaksi', 'tanggal_penjualan',
-                 'tanggal_order', 'tgl_transaksi', 'tgl_penjualan', 'tgl_order',
-                 'created_at', 'updated_at', 'invoice_date', 'tanggal_faktur'],
-        # Product columns
-        'product': ['product', 'produk', 'product_name', 'nama_produk', 'item', 'item_name',
-                    'nama_barang', 'barang', 'nama_item', 'deskripsi_produk', 'product_desc',
-                    'sku', 'nama', 'goods', 'merchandise', 'komoditi', 'nama_produk/jasa'],
-        # Quantity columns
-        'quantity': ['quantity', 'qty', 'jumlah', 'amount', 'jml', 'jumlah_barang', 'unit',
-                     'kuantitas', 'banyak', 'jml_barang', 'jumlah_unit', 'unit_terjual',
-                     'qty_sold', 'terjual', 'jumlah_terjual', 'volume', 'pieces', 'pcs'],
-        # Price columns
-        'price': ['price', 'harga', 'unit_price', 'harga_satuan', 'price_per_unit', 'harga_jual',
-                  'harga_per_unit', 'harga_item', 'unit_cost', 'selling_price',
-                  'harga_pokok', 'hpp', 'cost', 'rate', 'tarif'],
-        # Revenue/Sales columns
-        'revenue': ['grand_total', 'revenue', 'total_price', 'total_amount', 'penjualan',
-                    'total_harga', 'sales', 'omset', 'total_revenue', 'subtotal', 'sub_total',
-                    'total',
-                    'total_penjualan', 'total_bayar', 'total_pembayaran', 'nilai_penjualan',
-                    'nilai', 'nominal', 'jumlah_total', 'total_transaksi', 'pendapatan',
-                    'income', 'gross_sales', 'net_sales', 'total_sales', 'sale_amount',
-                    'harga_total', 'total_harga_jual'],
-        # Category columns
-        'category': ['category', 'kategori', 'product_category', 'kategori_produk', 'type',
-                     'jenis', 'tipe', 'divisi', 'division', 'group', 'grup', 'kelompok',
-                     'product_group', 'product_type', 'jenis_produk', 'kelas', 'channel'],
-        # Order/Invoice columns (e-commerce)
-        'order_id': ['no_pesanan', 'no_order', 'order_id', 'id_order', 'no_invoice',
-                     'invoice', 'no_faktur', 'faktur', 'ref', 'kode_transaksi'],
-        'channel': ['channel', 'marketplace', 'platform', 'saluran', 'sumber'],
-        'store': ['nama_toko', 'toko', 'store', 'nama_store', 'outlet', 'cabang'],
-        'courier': ['kurir', 'courier', 'ekspedisi', 'pengiriman', 'jasa_kirim'],
-        'status': ['status', 'status_order', 'status_transaksi', 'kondisi'],
-        'discount': ['diskon', 'discount', 'potongan', 'promo'],
-        'shipping': ['ongkir', 'shipping', 'ongkos_kirim', 'biaya_kirim', 'freight'],
-        'tax': ['pajak', 'tax', 'ppn', 'vat'],
-        # Customer columns
-        'customer': ['customer', 'customer_id', 'pelanggan', 'customer_name', 'nama_pelanggan',
-                     'buyer', 'pembeli', 'nama_pembeli', 'client', 'klien', 'konsumen',
-                     'nama_customer', 'nama_klien', 'id_pelanggan'],
-        # Region/Location columns
-        'region': ['region', 'lokasi', 'location', 'area', 'city', 'kota', 'province',
-                   'provinsi', 'wilayah', 'cabang', 'branch', 'store', 'toko', 'outlet',
-                   'nama_toko', 'nama_cabang', 'alamat', 'address', 'district', 'kecamatan']
+        # ── Date ──
+        'date': [
+            'date', 'tanggal', 'tgl', 'order_date', 'transaction_date', 'sale_date',
+            'timestamp', 'waktu', 'tanggal_transaksi', 'tanggal_penjualan',
+            'tanggal_order', 'tgl_transaksi', 'tgl_penjualan', 'tgl_order',
+            'created_at', 'updated_at', 'invoice_date', 'tanggal_faktur',
+            'tgl_order', 'tgl_transaksi', 'tgl_faktur', 'tgl_invoice',
+        ],
+        # ── Order / Invoice ──
+        'order_id': [
+            'no_pesanan', 'no_order', 'order_id', 'id_order', 'no_invoice',
+            'invoice', 'no_faktur', 'faktur', 'ref', 'kode_transaksi',
+            'nomor_pesanan', 'nomor_order', 'nomor_invoice', 'nomor_faktur',
+            'transaction_id', 'id_transaksi',
+        ],
+        # ── Customer ── (sebelum product agar 'nama_pelanggan' tidak nyasar ke product)
+        'customer': [
+            'customer', 'customer_id', 'id_customer', 'customer_name',
+            'nama_customer', 'nama_pelanggan', 'pelanggan', 'id_pelanggan',
+            'buyer', 'nama_pembeli', 'pembeli',
+            'client', 'klien', 'nama_klien', 'id_klien',
+            'konsumen', 'nama_konsumen',
+            'member', 'nama_member', 'id_member',
+            'pemesan', 'nama_pemesan',
+        ],
+        # ── Store / Toko ── (sebelum product & region agar 'nama_toko' tidak nyasar)
+        'store': [
+            'store', 'nama_store', 'id_store',
+            'toko', 'nama_toko', 'id_toko', 'kode_toko',
+            'outlet', 'nama_outlet', 'id_outlet', 'kode_outlet',
+            'gerai', 'nama_gerai',
+            'shop', 'nama_shop',
+            'warung', 'lapak',
+        ],
+        # ── Channel / Marketplace ── (sebelum category agar 'channel' tidak nyasar)
+        'channel': [
+            'channel', 'nama_channel', 'sales_channel',
+            'marketplace', 'platform', 'nama_platform',
+            'saluran', 'saluran_penjualan', 'sumber', 'sumber_penjualan',
+            'media', 'media_penjualan',
+            'shopee', 'tokopedia', 'lazada', 'bukalapak', 'blibli', 'tiktok_shop',
+        ],
+        # ── Region / Location ── (cabang/branch di sini, bukan di store)
+        'region': [
+            'region', 'nama_region', 'id_region', 'kode_region',
+            'lokasi', 'location',
+            'area', 'nama_area', 'kode_area',
+            'city', 'kota', 'nama_kota', 'kode_kota',
+            'province', 'provinsi', 'nama_provinsi',
+            'wilayah', 'nama_wilayah', 'kode_wilayah',
+            'cabang', 'nama_cabang', 'kode_cabang', 'id_cabang',
+            'branch', 'nama_branch',
+            'district', 'kecamatan', 'kelurahan',
+            'daerah', 'zona', 'zone',
+        ],
+        # ── Category ──
+        'category': [
+            'category', 'kategori', 'nama_kategori', 'kode_kategori',
+            'product_category', 'kategori_produk',
+            'type', 'tipe', 'jenis', 'jenis_produk',
+            'divisi', 'division',
+            'group', 'grup', 'kelompok', 'product_group', 'product_type',
+            'kelas', 'kelas_produk',
+            'brand', 'merek', 'merk',
+            'sub_category', 'sub_kategori',
+        ],
+        # ── Product ── (SETELAH store/customer/channel/region agar tidak salah tangkap)
+        # TIDAK boleh pakai 'nama' saja karena terlalu generik → konflik dengan nama_toko dll
+        'product': [
+            'product', 'id_product', 'kode_product',
+            'produk', 'nama_produk', 'id_produk', 'kode_produk',
+            'product_name', 'product_desc', 'product_description',
+            'item', 'item_name', 'item_desc', 'nama_item', 'kode_item',
+            'barang', 'nama_barang', 'kode_barang', 'id_barang',
+            'goods', 'merchandise',
+            'sku', 'kode_sku',
+            'komoditi', 'komoditas',
+            'nama_produk/jasa', 'produk/jasa',
+            'deskripsi_produk', 'deskripsi_barang',
+        ],
+        # ── Quantity ──
+        'quantity': [
+            'quantity', 'qty', 'jumlah', 'jml',
+            'jumlah_barang', 'jml_barang', 'jumlah_unit', 'jml_unit',
+            'jumlah_terjual', 'unit_terjual', 'qty_sold',
+            'terjual', 'banyak', 'volume',
+            'pieces', 'pcs', 'unit',
+            'kuantitas',
+        ],
+        # ── Price ──
+        'price': [
+            'price', 'unit_price', 'price_per_unit', 'selling_price',
+            'harga', 'harga_satuan', 'harga_jual', 'harga_per_unit',
+            'harga_item', 'harga_produk', 'harga_barang',
+            'unit_cost', 'harga_pokok', 'hpp', 'cost',
+            'rate', 'tarif', 'tariff',
+        ],
+        # ── Revenue / Sales ──
+        'revenue': [
+            'revenue', 'total_revenue', 'gross_sales', 'net_sales',
+            'total_sales', 'sale_amount', 'sales_amount',
+            'grand_total', 'total_price', 'total_amount',
+            'penjualan', 'total_penjualan', 'nilai_penjualan',
+            'total_harga', 'harga_total', 'total_harga_jual',
+            'total_bayar', 'total_pembayaran',
+            'omset', 'pendapatan', 'income',
+            'subtotal', 'sub_total',
+            'nominal', 'nilai', 'jumlah_total', 'total_transaksi',
+            'total',
+        ],
+        # ── Courier / Ekspedisi ──
+        'courier': [
+            'kurir', 'courier', 'ekspedisi', 'jasa_kirim', 'pengiriman',
+            'shipping_courier', 'nama_kurir',
+        ],
+        # ── Status ──
+        'status': [
+            'status', 'status_order', 'status_transaksi', 'status_pembayaran',
+            'kondisi', 'order_status',
+        ],
+        # ── Discount ──
+        'discount': [
+            'diskon', 'discount', 'potongan', 'potongan_harga', 'promo',
+            'voucher', 'cashback',
+        ],
+        # ── Shipping Cost ──
+        'shipping': [
+            'ongkir', 'ongkos_kirim', 'biaya_kirim', 'biaya_pengiriman',
+            'shipping', 'shipping_cost', 'freight',
+        ],
+        # ── Tax ──
+        'tax': [
+            'pajak', 'tax', 'ppn', 'vat', 'tax_amount',
+        ],
     }
+    
+    # Keyword yang DILARANG untuk partial match product
+    # → hindari 'nama_toko', 'nama_pelanggan', 'nama_cabang' dll nyasar ke product
+    _PRODUCT_PARTIAL_BLACKLIST = [
+        'toko', 'store', 'outlet', 'gerai', 'warung', 'lapak', 'shop',
+        'pelanggan', 'customer', 'pembeli', 'buyer', 'klien', 'konsumen',
+        'member', 'pemesan',
+        'cabang', 'branch', 'region', 'wilayah', 'area', 'kota', 'lokasi',
+        'channel', 'marketplace', 'platform', 'saluran',
+        'kurir', 'courier', 'ekspedisi',
+        'status', 'kondisi',
+        'tanggal', 'date', 'tgl', 'waktu',
+        'harga', 'price', 'total', 'revenue', 'omset', 'bayar',
+        'qty', 'jumlah', 'quantity',
+        'diskon', 'discount', 'ongkir', 'pajak', 'tax',
+        'invoice', 'faktur', 'order', 'transaksi',
+    ]
     
     def __init__(self):
         self.original_columns = None
@@ -135,78 +243,97 @@ class DataPreprocessor:
     
     def standardize_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Standarisasi nama kolom ke format umum
+        Standarisasi nama kolom ke format umum.
         
-        Parameters:
-        -----------
-        df : pd.DataFrame
-            DataFrame input
-            
-        Returns:
-        --------
-        pd.DataFrame
-            DataFrame dengan kolom yang sudah distandarisasi
+        Logika matching (berurutan, stop di match pertama per kolom):
+        1. Exact match  → paling aman, langsung petakan
+        2. Partial match → hati-hati, ada blacklist untuk 'product'
+           agar 'nama_toko', 'nama_pelanggan' dll tidak nyasar ke product
         """
         df = df.copy()
-        original_cols = df.columns.tolist()
-        new_columns = {}
-        
-        # Convert ke lowercase untuk matching
+        new_columns = {}   # col_clean → standard_name
+        mapped_std  = set()  # standard_name yang sudah terpetakan
+
+        # Normalisasi semua nama kolom: lowercase + underscore
         df.columns = [col.lower().strip().replace(' ', '_') for col in df.columns]
-        
+        all_cols = list(df.columns)
+
+        # ── PASS 1: EXACT MATCH ──────────────────────────────────────────────
+        # Prioritas tinggi: satu kolom → satu standard_name, first-win
         for standard_name, variations in self.COLUMN_MAPPINGS.items():
-            if standard_name in [v for v in new_columns.values()]:
-                continue  # already mapped
-            for col in df.columns:
-                col_clean = col.lower().strip().replace(' ', '_')
-                variations_lower = [v.lower().replace(' ', '_') for v in variations]
-                # Exact match first
-                if col_clean in variations_lower:
+            if standard_name in mapped_std:
+                continue
+            var_set = {v.lower().replace(' ', '_') for v in variations}
+            for col in all_cols:
+                if col in new_columns:
+                    continue  # kolom ini sudah dipetakan
+                if col in var_set:
                     new_columns[col] = standard_name
+                    mapped_std.add(standard_name)
                     self.mapped_columns[standard_name] = col
                     break
-                # Partial/substring match as fallback
-                # Skip kolom yg jelas numerik (%, no_, id_, kode_) untuk product/category
-                skip_for_text = standard_name in ['product', 'category'] and any(
-                    x in col_clean for x in ['%', 'no_', 'id_', 'kode_', 'jumlah', 'harga',
-                                             'total', 'diskon', 'biaya', 'pajak', 'ongkir',
-                                             'asuransi', 'potongan', 'qty', 'amount'])
-                if not skip_for_text:
-                    for var in variations_lower:
-                        if var in col_clean or col_clean in var:
-                            if col not in new_columns:  # dont overwrite exact match
-                                new_columns[col] = standard_name
-                                self.mapped_columns[standard_name] = col
-                            break
+
+        # ── PASS 2: PARTIAL / SUBSTRING MATCH ───────────────────────────────
+        # Hanya untuk kolom & standard_name yang belum terpetakan
+        blacklist = {b.lower() for b in self._PRODUCT_PARTIAL_BLACKLIST}
         
+        for standard_name, variations in self.COLUMN_MAPPINGS.items():
+            if standard_name in mapped_std:
+                continue
+            var_set = [v.lower().replace(' ', '_') for v in variations]
+            for col in all_cols:
+                if col in new_columns:
+                    continue
+                
+                # Untuk 'product': tolak kolom yang mengandung kata dari blacklist
+                if standard_name == 'product':
+                    col_words = set(col.split('_'))
+                    if col_words & blacklist:
+                        continue  # skip - kolom ini bukan produk
+                
+                # Cek substring match (var ada di dalam col, atau col ada di dalam var)
+                for var in var_set:
+                    if len(var) >= 3 and (var in col or col in var):
+                        new_columns[col] = standard_name
+                        mapped_std.add(standard_name)
+                        self.mapped_columns[standard_name] = col
+                        break
+                if standard_name in mapped_std:
+                    break
+
         df = df.rename(columns=new_columns)
         logger.info(f"Columns standardized: {new_columns}")
-        
-        # Fallback: kalau tidak ada kolom 'product', gunakan kolom lain sebagai proxy
+
+        # ── FALLBACK: pastikan kolom wajib ada ───────────────────────────────
+        # product fallback (jangan pakai store/toko sebagai proxy product!)
         if 'product' not in df.columns:
-            for fallback in ['channel', 'store', 'category', 'status', 'courier']:
+            for fallback in ['category', 'status', 'courier', 'channel']:
                 if fallback in df.columns:
-                    # pastikan kolom ini berisi string/kategori, bukan angka
                     col_dtype = df[fallback].dtype
                     if col_dtype == object or str(col_dtype) == 'string':
                         df['product'] = df[fallback].astype(str)
-                        logger.info(f"Kolom 'product' tidak ditemukan, menggunakan '{fallback}' sebagai proxy")
+                        logger.info(f"product proxy: '{fallback}'")
                         break
             else:
                 df['product'] = 'Unknown'
-                logger.warning("Kolom 'product' tidak ditemukan, diisi dengan 'Unknown'")
-        
-        # Fallback: kalau tidak ada kolom 'category', gunakan channel/store
+                logger.warning("Kolom 'product' tidak ditemukan, diisi 'Unknown'")
+
+        # category fallback
         if 'category' not in df.columns:
-            for fallback in ['channel', 'store', 'courier', 'status']:
+            for fallback in ['channel', 'courier', 'status']:
                 if fallback in df.columns:
                     df['category'] = df[fallback].astype(str)
-                    logger.info(f"Kolom 'category' tidak ditemukan, menggunakan '{fallback}' sebagai proxy")
+                    logger.info(f"category proxy: '{fallback}'")
                     break
             else:
                 df['category'] = 'General'
-                logger.warning("Kolom 'category' tidak ditemukan, diisi dengan 'General'")
-        
+                logger.warning("Kolom 'category' tidak ditemukan, diisi 'General'")
+
+        # region fallback: kalau ada store, bisa jadi proxy region juga
+        if 'region' not in df.columns and 'store' in df.columns:
+            df['region'] = df['store'].astype(str)
+            logger.info("region proxy: 'store'")
+
         return df
     
     def parse_date_column(self, df: pd.DataFrame, date_column: str = 'date') -> pd.DataFrame:
