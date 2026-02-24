@@ -1194,6 +1194,110 @@ class ReportGenerator:
         else:
             kpis['avg_margin'] = 30.0
 
+        # ── Branches / Regional Deep Dive ──
+        branches = []
+        if reg_col and 'revenue' in df.columns and 'date' in df.columns:
+            try:
+                # Split data menjadi 2 period: first half vs second half sebagai prev period
+                mid_date = df['date'].min() + (df['date'].max() - df['date'].min()) / 2
+                df_curr = df[df['date'] > mid_date]
+                df_prev = df[df['date'] <= mid_date]
+
+                curr_grp = df_curr.groupby(reg_col).agg(
+                    revenue=('revenue', 'sum'),
+                    transactions=('revenue', 'count')
+                ).reset_index()
+                prev_grp = df_prev.groupby(reg_col).agg(
+                    revenue_prev=('revenue', 'sum')
+                ).reset_index()
+
+                merged = curr_grp.merge(prev_grp, on=reg_col, how='left')
+                merged['revenue_prev'] = merged['revenue_prev'].fillna(0)
+
+                # Target = 110% dari current revenue sebagai simulasi
+                merged['target'] = merged['revenue'] * 1.10
+
+                for _, row in merged.sort_values('revenue', ascending=False).iterrows():
+                    branches.append({
+                        'name':         str(row[reg_col]),
+                        'revenue':      sf(row['revenue']),
+                        'revenue_prev': sf(row['revenue_prev']),
+                        'transactions': int(row.get('transactions', 0)),
+                        'target':       sf(row['target']),
+                    })
+            except Exception as e:
+                logger.warning(f"Branches data error: {e}")
+
+        # ── Channels ──
+        channels = []
+        ch_col = self._col(self._COL_CHANNEL)
+        if ch_col and 'revenue' in df.columns and 'date' in df.columns:
+            try:
+                mid_date = df['date'].min() + (df['date'].max() - df['date'].min()) / 2
+                df_curr = df[df['date'] > mid_date]
+                df_prev = df[df['date'] <= mid_date]
+
+                curr_ch = df_curr.groupby(ch_col).agg(
+                    revenue=('revenue', 'sum'),
+                    transactions=('revenue', 'count')
+                ).reset_index()
+                prev_ch = df_prev.groupby(ch_col).agg(
+                    revenue_prev=('revenue', 'sum')
+                ).reset_index()
+
+                merged_ch = curr_ch.merge(prev_ch, on=ch_col, how='left')
+                merged_ch['revenue_prev'] = merged_ch['revenue_prev'].fillna(0)
+
+                for _, row in merged_ch.sort_values('revenue', ascending=False).iterrows():
+                    channels.append({
+                        'name':         str(row[ch_col]),
+                        'revenue':      sf(row['revenue']),
+                        'revenue_prev': sf(row['revenue_prev']),
+                        'transactions': int(row.get('transactions', 0)),
+                    })
+            except Exception as e:
+                logger.warning(f"Channels data error: {e}")
+
+        # ── Sales Persons ──
+        salespeople = []
+        sp_col = self._col(self._COL_SALES)
+        if sp_col and 'revenue' in df.columns and 'date' in df.columns:
+            try:
+                mid_date = df['date'].min() + (df['date'].max() - df['date'].min()) / 2
+                df_curr = df[df['date'] > mid_date]
+                df_prev = df[df['date'] <= mid_date]
+
+                curr_sp = df_curr.groupby(sp_col).agg(
+                    revenue=('revenue', 'sum'),
+                    transactions=('revenue', 'count')
+                ).reset_index()
+                prev_sp = df_prev.groupby(sp_col).agg(
+                    revenue_prev=('revenue', 'sum')
+                ).reset_index()
+
+                merged_sp = curr_sp.merge(prev_sp, on=sp_col, how='left')
+                merged_sp['revenue_prev'] = merged_sp['revenue_prev'].fillna(0)
+
+                # Target = 110% dari current revenue sebagai simulasi
+                merged_sp['target'] = merged_sp['revenue'] * 1.10
+
+                # Filter out "Online" atau entry non-salesperson
+                non_sp = {'online', '-', 'n/a', 'none', ''}
+                merged_sp = merged_sp[
+                    ~merged_sp[sp_col].str.lower().isin(non_sp)
+                ]
+
+                for _, row in merged_sp.sort_values('revenue', ascending=False).head(15).iterrows():
+                    salespeople.append({
+                        'name':         str(row[sp_col]),
+                        'revenue':      sf(row['revenue']),
+                        'revenue_prev': sf(row['revenue_prev']),
+                        'transactions': int(row.get('transactions', 0)),
+                        'target':       sf(row['target']),
+                    })
+            except Exception as e:
+                logger.warning(f"Salespeople data error: {e}")
+
         # ── Serialise payload (no NaN) ──
         payload = clean({
             'output_path':       str(output_path),
@@ -1210,6 +1314,9 @@ class ReportGenerator:
             'categories':        categories,
             'pareto':            pareto,
             'insights':          insights,
+            'branches':          branches,
+            'channels':          channels,
+            'salespeople':       salespeople,
         })
 
         # ── Generate PPTX dengan pure Python (python-pptx) ──
