@@ -426,7 +426,7 @@ def add_doughnut_chart(slide, labels: list, values: list, x, y, w, h, colors: li
 
 
 # ── SLIDES ─────────────────────────────────────────────────────────────────────
-TOTAL = 9
+TOTAL = 12
 
 
 def slide_title(prs, data: dict):
@@ -477,23 +477,27 @@ def slide_agenda(prs, data: dict):
                  font_size=26, bold=True, color_hex=P['white'])
 
     items = [
-        ("01", "Executive Summary",     "KPI utama, growth & key insights"),
-        ("02", "Tren Revenue",           "Tren bulanan & MoM growth"),
-        ("03", "Sales Performance",      "Top & bottom produk by revenue"),
-        ("04", "Profitability Analysis", "Margin & profit per produk"),
-        ("05", "Customer & RFM",         "Segmentasi & top customer"),
-        ("06", "Regional & Category",    "Wilayah, kategori & Pareto 80/20"),
+        ("01", "Executive Summary",      "KPI utama, growth & key insights"),
+        ("02", "Tren Revenue",            "Tren bulanan & MoM growth"),
+        ("03", "Sales Performance",       "Top & bottom produk by revenue"),
+        ("04", "Profitability Analysis",  "Margin & profit per produk"),
+        ("05", "Customer & RFM",          "Segmentasi & top customer"),
+        ("06", "Regional & Category",     "Wilayah, kategori & Pareto 80/20"),
+        ("07", "Branch / Regional Deep",  "Revenue, growth & ranking per cabang"),
+        ("08", "Channel Analysis",        "Performa & growth per channel penjualan"),
+        ("09", "Sales Person",            "Ranking & kontribusi per sales person"),
     ]
+    # 3-column layout for 9 items
     for i_idx, (num, title, sub) in enumerate(items):
-        col = i_idx % 2
-        row = i_idx // 2
-        x = 0.38 + col * 4.82
-        y = 1.05 + row * 1.27
-        add_card(slide, prs, x, y, 4.55, 1.1)
-        add_rect(slide, x, y, 0.055, 1.1, P['accent'])
-        add_text_box(slide, num,   x+0.13, y+0.1,  0.55, 0.42, font_size=20, bold=True, color_hex=P['accent'])
-        add_text_box(slide, title, x+0.72, y+0.1,  3.7,  0.38, font_size=13, bold=True, color_hex=P['white'])
-        add_text_box(slide, sub,   x+0.72, y+0.52, 3.7,  0.38, font_size=10, color_hex=P['muted'])
+        col = i_idx % 3
+        row = i_idx // 3
+        x = 0.28 + col * 3.18
+        y = 1.0 + row * 1.3
+        add_card(slide, prs, x, y, 3.05, 1.12)
+        add_rect(slide, x, y, 0.055, 1.12, P['accent'])
+        add_text_box(slide, num,   x+0.13, y+0.1,  0.5,  0.38, font_size=16, bold=True, color_hex=P['accent'])
+        add_text_box(slide, title, x+0.68, y+0.1,  2.3,  0.38, font_size=11, bold=True, color_hex=P['white'])
+        add_text_box(slide, sub,   x+0.68, y+0.52, 2.3,  0.42, font_size=8,  color_hex=P['muted'])
 
     add_footer(slide, prs, 2, TOTAL)
 
@@ -782,11 +786,330 @@ def slide_regional_category(prs, data: dict):
     add_footer(slide, prs, 8, TOTAL)
 
 
+def _ranking_table(slide, prs, items: list, x, y, w, h,
+                   col_defs: list, row_limit: int = 8):
+    """
+    Generic ranking table with alternating rows.
+    col_defs = [{'key': ..., 'label': ..., 'w': float, 'color': hex, 'fmt': callable}]
+    """
+    if not items:
+        return
+    items = items[:row_limit]
+    row_h = min(0.42, (h - 0.44) / max(len(items), 1))
+
+    # Header
+    add_rect(slide, x, y, w, 0.36, P['bg2'])
+    cx = x + 0.06
+    for cd in col_defs:
+        add_text_box(slide, cd['label'], cx, y + 0.07, cd['w'] - 0.06, 0.24,
+                     font_size=8, bold=True, color_hex=P['blue'])
+        cx += cd['w']
+
+    # Data rows
+    for r_idx, item in enumerate(items):
+        ry = y + 0.36 + r_idx * row_h
+        if ry + row_h > y + h:
+            break
+        row_bg = P['card'] if r_idx % 2 == 0 else P['bg2']
+        add_rect(slide, x, ry, w, row_h, row_bg)
+        # left accent on top 3
+        if r_idx < 3:
+            medal_colors = [P['amber'], P['muted'], P['accent']]
+            add_rect(slide, x, ry, 0.04, row_h, medal_colors[r_idx])
+        cx = x + 0.06
+        for cd in col_defs:
+            val = item.get(cd['key'], '')
+            fmt_fn = cd.get('fmt')
+            display = fmt_fn(val) if fmt_fn and val != '' else str(val)
+            add_text_box(slide, display, cx, ry + 0.06,
+                         cd['w'] - 0.06, row_h - 0.1,
+                         font_size=8, color_hex=cd.get('color', P['text']))
+            cx += cd['w']
+
+
+def _growth_badge(slide, prs, x, y, w, h, label: str, val_now, val_prev,
+                  color: str, icon: str = ""):
+    """Mini card showing metric + growth vs previous period."""
+    add_card(slide, prs, x, y, w, h)
+    add_rect(slide, x, y, w, 0.035, color)
+    if icon:
+        add_text_box(slide, icon, x + 0.1, y + 0.07, 0.4, 0.35, font_size=14)
+    val_now_f   = safe(val_now)
+    val_prev_f  = safe(val_prev)
+    growth = ((val_now_f - val_prev_f) / val_prev_f * 100) if val_prev_f else 0
+    arrow  = "▲" if growth >= 0 else "▼"
+    g_color = P['green'] if growth >= 0 else P['red']
+    add_text_box(slide, fmt_currency(val_now_f), x + 0.1, y + 0.38, w - 0.18, 0.32,
+                 font_size=13, bold=True, color_hex=P['white'])
+    add_text_box(slide, label.upper(), x + 0.1, y + 0.68, w - 0.18, 0.18,
+                 font_size=7, color_hex=P['blue'])
+    add_text_box(slide, f"{arrow} {abs(growth):.1f}% vs prev",
+                 x + 0.1, y + 0.85, w - 0.18, 0.18,
+                 font_size=7, bold=True, color_hex=g_color)
+
+
+# ── SLIDE 10 · BRANCH / REGIONAL DEEP DIVE ────────────────────────────────────
+def slide_branch(prs, data: dict):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    add_base(slide, prs)
+    add_text_box(slide, "Branch / Regional Performance", 0.3, 0.18, 9.4, 0.48,
+                 font_size=22, bold=True, color_hex=P['white'])
+    add_text_box(slide, "Revenue, growth & ranking per cabang/wilayah",
+                 0.3, 0.63, 9.4, 0.22, font_size=10, color_hex=P['muted'])
+
+    branches = data.get('branches') or data.get('branch_data') or []
+    # Fallback: derive from regional if no branch data
+    if not branches:
+        branches = [
+            {'name': r.get('region', r.get('name', '')),
+             'revenue': r.get('revenue', 0),
+             'revenue_prev': r.get('revenue_prev', safe(r.get('revenue', 0)) * 0.9),
+             'transactions': r.get('transactions', 0),
+             'target': r.get('target', safe(r.get('revenue', 0)) * 1.1)}
+            for r in (data.get('regional') or [])
+        ]
+
+    if not branches:
+        add_text_box(slide, "Data branch tidak tersedia",
+                     3.5, 2.5, 3, 0.4, font_size=12, color_hex=P['muted'], align=PP_ALIGN.CENTER)
+        add_footer(slide, prs, 10, TOTAL)
+        return
+
+    top_branches = sorted(branches, key=lambda b: safe(b.get('revenue', 0)), reverse=True)[:8]
+
+    # ── TOP KPI CARDS ──────────────────────────────────────────────────────────
+    total_rev   = sum(safe(b.get('revenue', 0)) for b in branches)
+    total_prev  = sum(safe(b.get('revenue_prev', 0)) for b in branches)
+    total_txn   = sum(safe(b.get('transactions', 0)) for b in branches)
+    total_tgt   = sum(safe(b.get('target', 0)) for b in branches)
+    ach_pct     = (total_rev / total_tgt * 100) if total_tgt else 0
+    n_branches  = len(branches)
+
+    kpi_w = 9.4 / 4
+    for idx, (icon, val, label, col) in enumerate([
+        ("🏢", fmt_currency(total_rev),   "Total Revenue",    P['accent']),
+        ("📊", f"{ach_pct:.1f}%",          "Target Achievement", P['green']),
+        ("🔢", fmt_num(total_txn),         "Total Transaksi",  P['sky']),
+        ("🏬", str(n_branches),            "Jumlah Branch",    P['purple']),
+    ]):
+        bx = 0.3 + idx * kpi_w
+        kpi_block(slide, prs, bx, 0.9, kpi_w - 0.12, 1.05, icon, val, label, col)
+
+    # ── LEFT: Bar chart revenue per branch ────────────────────────────────────
+    sec_label(slide, prs, "Revenue per Branch", 0.3, 2.1, 4.8)
+    try:
+        add_bar_chart(slide,
+                      [trunc(b.get('name', ''), 16) for b in top_branches],
+                      [round(safe(b.get('revenue', 0))) for b in top_branches],
+                      0.3, 2.38, 4.8, 2.9,
+                      P['chart_blues'], XL_CHART_TYPE.BAR_CLUSTERED)
+    except Exception:
+        pass
+
+    # ── RIGHT: Ranking table ────────────────────────────────────────────────
+    sec_label(slide, prs, "Ranking & Growth", 5.3, 2.1, 4.4)
+    add_card(slide, prs, 5.3, 2.38, 4.4, 2.9)
+
+    col_defs = [
+        {'key': 'rank',        'label': '#',        'w': 0.3,  'color': P['accent']},
+        {'key': 'name',        'label': 'Branch',   'w': 1.45, 'color': P['text'],
+         'fmt': lambda v: trunc(str(v), 14)},
+        {'key': 'revenue',     'label': 'Revenue',  'w': 1.35, 'color': P['blue'],
+         'fmt': fmt_currency},
+        {'key': 'growth_pct',  'label': 'Growth',   'w': 0.75, 'color': P['green'],
+         'fmt': lambda v: (f"▲{v:.1f}%" if safe(v) >= 0 else f"▼{abs(safe(v)):.1f}%")},
+        {'key': 'ach_pct',     'label': 'Ach%',     'w': 0.55, 'color': P['amber'],
+         'fmt': lambda v: f"{safe(v):.0f}%"},
+    ]
+
+    # Enrich with computed fields
+    enriched = []
+    for r_idx, b in enumerate(top_branches):
+        rev   = safe(b.get('revenue', 0))
+        prev  = safe(b.get('revenue_prev', rev * 0.9))
+        tgt   = safe(b.get('target', rev * 1.1))
+        growth = ((rev - prev) / prev * 100) if prev else 0
+        ach    = (rev / tgt * 100) if tgt else 0
+        enriched.append({**b, 'rank': r_idx + 1,
+                         'growth_pct': growth, 'ach_pct': ach})
+
+    _ranking_table(slide, prs, enriched, 5.3, 2.38, 4.4, 2.9, col_defs, row_limit=8)
+
+    add_footer(slide, prs, 10, TOTAL)
+
+
+# ── SLIDE 11 · CHANNEL ANALYSIS ───────────────────────────────────────────────
+def slide_channel(prs, data: dict):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    add_base(slide, prs)
+    add_text_box(slide, "Channel Analysis", 0.3, 0.18, 9.4, 0.48,
+                 font_size=22, bold=True, color_hex=P['white'])
+    add_text_box(slide, "Performa & growth per channel penjualan",
+                 0.3, 0.63, 9.4, 0.22, font_size=10, color_hex=P['muted'])
+
+    channels = data.get('channels') or data.get('channel_data') or []
+    if not channels:
+        add_text_box(slide, "Data channel tidak tersedia",
+                     3.5, 2.5, 3, 0.4, font_size=12, color_hex=P['muted'], align=PP_ALIGN.CENTER)
+        add_footer(slide, prs, 11, TOTAL)
+        return
+
+    channels_sorted = sorted(channels, key=lambda c: safe(c.get('revenue', 0)), reverse=True)
+
+    # ── KPI CARDS ─────────────────────────────────────────────────────────────
+    total_rev  = sum(safe(c.get('revenue', 0)) for c in channels)
+    best       = channels_sorted[0] if channels_sorted else {}
+    best_name  = best.get('name', best.get('channel', '—'))
+    best_rev   = safe(best.get('revenue', 0))
+    best_pct   = (best_rev / total_rev * 100) if total_rev else 0
+    n_ch       = len(channels)
+
+    # Avg growth
+    growths = []
+    for c in channels:
+        rev  = safe(c.get('revenue', 0))
+        prev = safe(c.get('revenue_prev', 0))
+        if prev:
+            growths.append((rev - prev) / prev * 100)
+    avg_growth = sum(growths) / len(growths) if growths else 0
+
+    kpi_w = 9.4 / 4
+    for idx, (icon, val, label, col) in enumerate([
+        ("💰", fmt_currency(total_rev),     "Total Revenue",    P['accent']),
+        ("🥇", trunc(best_name, 12),        "Top Channel",      P['amber']),
+        ("📈", f"{avg_growth:+.1f}%",       "Avg Growth",       P['green'] if avg_growth >= 0 else P['red']),
+        ("📡", str(n_ch),                   "Jumlah Channel",   P['purple']),
+    ]):
+        bx = 0.3 + idx * kpi_w
+        kpi_block(slide, prs, bx, 0.9, kpi_w - 0.12, 1.05, icon, val, label, col)
+
+    # ── LEFT: Donut share per channel ─────────────────────────────────────────
+    sec_label(slide, prs, "Revenue Share per Channel", 0.3, 2.1, 4.65)
+    ch_labels = [trunc(c.get('name', c.get('channel', '')), 14) for c in channels_sorted[:7]]
+    ch_vals   = [round(safe(c.get('revenue', 0))) for c in channels_sorted[:7]]
+    try:
+        add_doughnut_chart(slide, ch_labels, ch_vals,
+                           0.3, 2.38, 4.65, 2.9, P['chart_multi'])
+    except Exception:
+        pass
+
+    # ── RIGHT: Table with growth & conversion ─────────────────────────────────
+    sec_label(slide, prs, "Detail per Channel", 5.15, 2.1, 4.55)
+    add_card(slide, prs, 5.15, 2.38, 4.55, 2.9)
+
+    col_defs = [
+        {'key': 'rank',       'label': '#',         'w': 0.28, 'color': P['accent']},
+        {'key': 'name',       'label': 'Channel',   'w': 1.35, 'color': P['text'],
+         'fmt': lambda v: trunc(str(v), 13)},
+        {'key': 'revenue',    'label': 'Revenue',   'w': 1.25, 'color': P['blue'],
+         'fmt': fmt_currency},
+        {'key': 'share_pct',  'label': 'Share',     'w': 0.65, 'color': P['amber'],
+         'fmt': lambda v: f"{safe(v):.1f}%"},
+        {'key': 'growth_pct', 'label': 'Growth',    'w': 1.02, 'color': P['green'],
+         'fmt': lambda v: (f"▲{safe(v):.1f}%" if safe(v) >= 0 else f"▼{abs(safe(v)):.1f}%")},
+    ]
+
+    enriched = []
+    for r_idx, c in enumerate(channels_sorted):
+        rev  = safe(c.get('revenue', 0))
+        prev = safe(c.get('revenue_prev', 0))
+        gr   = ((rev - prev) / prev * 100) if prev else 0
+        sh   = (rev / total_rev * 100) if total_rev else 0
+        n    = c.get('name', c.get('channel', f'Channel {r_idx+1}'))
+        enriched.append({'rank': r_idx + 1, 'name': n,
+                         'revenue': rev, 'share_pct': sh, 'growth_pct': gr})
+
+    _ranking_table(slide, prs, enriched, 5.15, 2.38, 4.55, 2.9, col_defs, row_limit=8)
+
+    add_footer(slide, prs, 11, TOTAL)
+
+
+# ── SLIDE 12 · SALES PERSON ───────────────────────────────────────────────────
+def slide_salesperson(prs, data: dict):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    add_base(slide, prs)
+    add_text_box(slide, "Sales Person Performance", 0.3, 0.18, 9.4, 0.48,
+                 font_size=22, bold=True, color_hex=P['white'])
+    add_text_box(slide, "Ranking, kontribusi & growth per sales person",
+                 0.3, 0.63, 9.4, 0.22, font_size=10, color_hex=P['muted'])
+
+    salespeople = data.get('salespeople') or data.get('sales_persons') or data.get('salesperson_data') or []
+    if not salespeople:
+        add_text_box(slide, "Data sales person tidak tersedia",
+                     3.5, 2.5, 3, 0.4, font_size=12, color_hex=P['muted'], align=PP_ALIGN.CENTER)
+        add_footer(slide, prs, 12, TOTAL)
+        return
+
+    sp_sorted = sorted(salespeople, key=lambda s: safe(s.get('revenue', 0)), reverse=True)
+
+    # ── KPI CARDS ─────────────────────────────────────────────────────────────
+    total_rev  = sum(safe(s.get('revenue', 0)) for s in salespeople)
+    top_sp     = sp_sorted[0] if sp_sorted else {}
+    top_name   = top_sp.get('name', top_sp.get('salesperson', '—'))
+    n_sp       = len(salespeople)
+    avg_rev    = total_rev / n_sp if n_sp else 0
+
+    total_prev = sum(safe(s.get('revenue_prev', 0)) for s in salespeople)
+    team_growth = ((total_rev - total_prev) / total_prev * 100) if total_prev else 0
+
+    kpi_w = 9.4 / 4
+    for idx, (icon, val, label, col) in enumerate([
+        ("💰", fmt_currency(total_rev),          "Total Revenue Tim",  P['accent']),
+        ("🏆", trunc(top_name, 13),              "Top Performer",      P['amber']),
+        ("📊", fmt_currency(avg_rev),            "Avg Revenue/Sales",  P['sky']),
+        ("📈", f"{team_growth:+.1f}%",           "Team Growth",        P['green'] if team_growth >= 0 else P['red']),
+    ]):
+        bx = 0.3 + idx * kpi_w
+        kpi_block(slide, prs, bx, 0.9, kpi_w - 0.12, 1.05, icon, val, label, col)
+
+    # ── LEFT: Bar chart top 8 sales person ────────────────────────────────────
+    top8 = sp_sorted[:8]
+    sec_label(slide, prs, "Top Sales Person by Revenue", 0.3, 2.1, 4.8)
+    try:
+        add_bar_chart(slide,
+                      [trunc(s.get('name', s.get('salesperson', '')), 14) for s in top8],
+                      [round(safe(s.get('revenue', 0))) for s in top8],
+                      0.3, 2.38, 4.8, 2.9,
+                      P['chart_blues'], XL_CHART_TYPE.BAR_CLUSTERED)
+    except Exception:
+        pass
+
+    # ── RIGHT: Ranking table with growth & target achievement ─────────────────
+    sec_label(slide, prs, "Detail & Growth", 5.3, 2.1, 4.4)
+    add_card(slide, prs, 5.3, 2.38, 4.4, 2.9)
+
+    col_defs = [
+        {'key': 'rank',       'label': '#',        'w': 0.28, 'color': P['accent']},
+        {'key': 'name',       'label': 'Sales',    'w': 1.4,  'color': P['text'],
+         'fmt': lambda v: trunc(str(v), 13)},
+        {'key': 'revenue',    'label': 'Revenue',  'w': 1.25, 'color': P['blue'],
+         'fmt': fmt_currency},
+        {'key': 'growth_pct', 'label': 'Growth',   'w': 0.75, 'color': P['green'],
+         'fmt': lambda v: (f"▲{safe(v):.1f}%" if safe(v) >= 0 else f"▼{abs(safe(v)):.1f}%")},
+        {'key': 'ach_pct',    'label': 'Ach%',     'w': 0.72, 'color': P['amber'],
+         'fmt': lambda v: f"{safe(v):.0f}%"},
+    ]
+
+    enriched = []
+    for r_idx, s in enumerate(top8):
+        rev  = safe(s.get('revenue', 0))
+        prev = safe(s.get('revenue_prev', 0))
+        tgt  = safe(s.get('target', rev * 1.1))
+        gr   = ((rev - prev) / prev * 100) if prev else 0
+        ach  = (rev / tgt * 100) if tgt else 0
+        nm   = s.get('name', s.get('salesperson', f'SP {r_idx+1}'))
+        enriched.append({'rank': r_idx + 1, 'name': nm,
+                         'revenue': rev, 'growth_pct': gr, 'ach_pct': ach})
+
+    _ranking_table(slide, prs, enriched, 5.3, 2.38, 4.4, 2.9, col_defs, row_limit=8)
+
+    add_footer(slide, prs, 12, TOTAL)
+
+
+
 def slide_closing(prs, data: dict):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     set_slide_bg(slide, prs, P['bg'])
-
-    add_rect(slide, 0, 0,      10, 0.07, P['accent'])
     add_rect(slide, 0, 5.555,  10, 0.07, P['accent'])
     add_rect(slide, 0, 0,     3.8, 5.625, P['sky'], P['bg'])
 
@@ -810,14 +1133,17 @@ def slide_closing(prs, data: dict):
 # ── MAIN ENTRY POINT ───────────────────────────────────────────────────────────
 def build_presentation(data: dict, output_path: str) -> str:
     """
-    Build the 9-slide Ocean Dark Sales presentation.
+    Build the 12-slide Ocean Dark Sales presentation.
 
     Parameters
     ----------
     data : dict
-        Payload with keys: kpis, growth, monthly_trend, top_products,
-        bottom_products, profit_by_product, rfm_segments, top_customers,
-        regional, categories, pareto, insights, date_range, output_path
+        Payload with keys:
+        kpis, growth, monthly_trend, top_products, bottom_products,
+        profit_by_product, rfm_segments, top_customers,
+        regional, categories, pareto, insights, date_range,
+        branches / branch_data, channels / channel_data,
+        salespeople / sales_persons / salesperson_data
     output_path : str
         Path to save the .pptx file.
 
@@ -830,17 +1156,18 @@ def build_presentation(data: dict, output_path: str) -> str:
     prs.slide_width  = W
     prs.slide_height = H
 
-    # Remove default layouts (keep blank layout at index 6 usually)
-    # We use layout 6 which is blank in the built-in template
-    slide_title(prs, data)
-    slide_agenda(prs, data)
-    slide_kpi(prs, data)
-    slide_trend(prs, data)
-    slide_sales(prs, data)
-    slide_profit(prs, data)
-    slide_customer(prs, data)
-    slide_regional_category(prs, data)
-    slide_closing(prs, data)
+    slide_title(prs, data)             # 1
+    slide_agenda(prs, data)            # 2
+    slide_kpi(prs, data)               # 3
+    slide_trend(prs, data)             # 4
+    slide_sales(prs, data)             # 5
+    slide_profit(prs, data)            # 6
+    slide_customer(prs, data)          # 7
+    slide_regional_category(prs, data) # 8
+    slide_branch(prs, data)            # 9  ← NEW
+    slide_channel(prs, data)           # 10 ← NEW
+    slide_salesperson(prs, data)       # 11 ← NEW
+    slide_closing(prs, data)           # 12
 
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
