@@ -1146,20 +1146,33 @@ def tab_reports():
                 except Exception as e: st.error(f"❌ {e}")
         st.markdown('</div>', unsafe_allow_html=True)
     with c3:
-        st.markdown('<div class="glass-card"><p class="card-title">📁 CSV Export</p>', unsafe_allow_html=True)
-        if st.button("Export CSV ZIP"):
-            with st.spinner("Exporting..."):
+        st.markdown('<div class="glass-card"><p class="card-title">🎨 PowerPoint Presentation</p>', unsafe_allow_html=True)
+        st.markdown('<p style="color:#7dd3fc;font-size:0.82rem;margin:0 0 12px 0">Presentasi eksekutif otomatis: KPI, tren, produk, margin, customer, regional &amp; pareto — langsung dari data.</p>', unsafe_allow_html=True)
+        if st.button("🎨 Generate Presentasi (.pptx)", use_container_width=True):
+            with st.spinner("Generating PowerPoint... (30–60 detik)"):
                 try:
-                    import zipfile
                     Path('reports').mkdir(exist_ok=True)
                     r = ReportGenerator(analyzer)
-                    r.export_to_csv('reports')
-                    zp = 'reports/csv_export.zip'
-                    with zipfile.ZipFile(zp,'w') as zf:
-                        for csv in Path('reports').glob('*.csv'): zf.write(csv, csv.name)
-                    with open(zp,'rb') as f:
-                        st.download_button("⬇️ Download ZIP", f.read(), 'csv_export.zip', 'application/zip')
-                except Exception as e: st.error(f"❌ {e}")
+                    pptx_path = r.export_to_pptx(
+                        'reports/sales_presentation.pptx',
+                        st.session_state.forecast_df,
+                        st.session_state.segments_df,
+                        st.session_state.anomaly_df
+                    )
+                    with open(pptx_path, 'rb') as f:
+                        st.download_button(
+                            "⬇️ Download Presentasi",
+                            f.read(),
+                            file_name="SalesML_Presentation.pptx",
+                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                            use_container_width=True
+                        )
+                    st.success("✅ Presentasi siap didownload!")
+                except FileNotFoundError as e:
+                    st.error(f"❌ {e}")
+                    st.info("💡 Pastikan file generate_pptx.js ada di folder yang sama dengan utils.py dan Node.js sudah terinstall.")
+                except Exception as e:
+                    st.error(f"❌ {e}")
         st.markdown('</div>', unsafe_allow_html=True)
 
     section("🔍 Raw Data Preview")
