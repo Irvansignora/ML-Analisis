@@ -843,73 +843,122 @@ def format_number(value: float) -> str:
         return f"{value:,.0f}"
 
 
-def create_sample_data(n_records: int = 1000, output_path: str = 'data/sample_sales.csv'):
+def create_sample_data(n_records: int = 3000, output_path: str = 'data/sample_sales.csv'):
     """
-    Create sample sales data untuk testing
-    
-    Parameters:
-    -----------
-    n_records : int
-        Jumlah records
-    output_path : str
-        Path untuk menyimpan file
+    Generate sample data penjualan lengkap yang kompatibel dengan semua fitur dashboard.
+    Kolom: tanggal, nama_produk, kategori, harga_satuan, hpp, qty, diskon, ongkir,
+           grand_total, pelanggan, salesperson, nama_toko, kota, provinsi, channel,
+           kurir, status
     """
     np.random.seed(42)
-    
-    # Generate dates
+
+    products = [
+        ('Laptop ProBook 14',       'Komputer',    8_500_000, 0.62),
+        ('Laptop Gaming ASUS',      'Komputer',   14_000_000, 0.60),
+        ('PC Desktop Core i7',      'Komputer',   12_000_000, 0.58),
+        ('Monitor 27" 4K',          'Komputer',    4_200_000, 0.55),
+        ('Keyboard Mechanical',     'Aksesoris',     850_000, 0.45),
+        ('Mouse Wireless Logitech', 'Aksesoris',     450_000, 0.42),
+        ('Headset Gaming RGB',      'Aksesoris',     750_000, 0.48),
+        ('Webcam Full HD',          'Aksesoris',     650_000, 0.44),
+        ('Smartphone Samsung A55',  'Handphone',   6_500_000, 0.65),
+        ('Smartphone iPhone 15',    'Handphone',  18_000_000, 0.70),
+        ('Smartphone Xiaomi 13',    'Handphone',   4_200_000, 0.60),
+        ('Tablet iPad Air',         'Tablet',      9_800_000, 0.63),
+        ('Tablet Samsung Tab S9',   'Tablet',      8_200_000, 0.61),
+        ('Speaker Bluetooth JBL',   'Audio',       1_200_000, 0.50),
+        ('Earbuds TWS Sony',        'Audio',       1_800_000, 0.52),
+        ('Smart TV 43"',            'Elektronik',  5_500_000, 0.58),
+        ('Smart TV 55"',            'Elektronik',  8_000_000, 0.57),
+        ('Kamera DSLR Canon',       'Kamera',     12_500_000, 0.64),
+        ('Kamera Mirrorless Sony',  'Kamera',     15_000_000, 0.65),
+        ('Power Bank 20000mAh',     'Aksesoris',     380_000, 0.40),
+    ]
+    prod_w = np.array([6,4,3,5,8,9,7,6,5,2,7,4,4,8,7,4,3,2,2,9], dtype=float)
+    prod_w /= prod_w.sum()
+
+    salespersons = [
+        'Budi Santoso','Siti Rahayu','Ahmad Fauzi','Dewi Lestari','Rizky Pratama',
+        'Nina Kusuma','Hendra Wijaya','Rina Marlina','Doni Firmansyah','Yuli Astuti'
+    ]
+    customers = [f'CUST-{str(i).zfill(4)}' for i in range(1, 201)]
+    stores = [
+        ('Toko Pusat Jakarta Selatan', 'Jakarta',   'DKI Jakarta'),
+        ('Toko Cabang Jakarta Barat',  'Jakarta',   'DKI Jakarta'),
+        ('Toko Cabang Depok',          'Depok',     'Jawa Barat'),
+        ('Toko Cabang Bekasi',         'Bekasi',    'Jawa Barat'),
+        ('Toko Cabang Surabaya',       'Surabaya',  'Jawa Timur'),
+        ('Toko Cabang Malang',         'Malang',    'Jawa Timur'),
+        ('Toko Cabang Bandung',        'Bandung',   'Jawa Barat'),
+        ('Toko Cabang Medan',          'Medan',     'Sumatera Utara'),
+        ('Toko Cabang Makassar',       'Makassar',  'Sulawesi Selatan'),
+        ('Toko Cabang Semarang',       'Semarang',  'Jawa Tengah'),
+    ]
+    channels   = ['Offline','Shopee','Tokopedia','Website','WhatsApp','Tiktok Shop']
+    ch_w       = np.array([0.30,0.25,0.20,0.10,0.10,0.05])
+    couriers   = ['JNE','J&T','SiCepat','Anteraja','Gosend']
+    status_pool= ['Selesai']*6 + ['Diproses','Dikirim','Dikembalikan']
+
     start_date = datetime(2023, 1, 1)
-    dates = [start_date + timedelta(days=x) for x in range(n_records)]
-    
-    # Generate products
-    products = ['Laptop', 'Smartphone', 'Tablet', 'Headphones', 'Smartwatch',
-               'Camera', 'Speaker', 'Monitor', 'Keyboard', 'Mouse']
-    
-    # Generate categories
-    categories = ['Electronics', 'Accessories', 'Computers']
-    
-    # Generate regions
-    regions = ['Jakarta', 'Surabaya', 'Bandung', 'Medan', 'Makassar']
-    
-    # Create data dengan trend dan seasonality
-    data = []
-    for i, date in enumerate(dates):
-        # Add trend
-        trend = i * 1000
-        
-        # Add seasonality (monthly)
-        month_factor = 1 + 0.2 * np.sin(2 * np.pi * date.month / 12)
-        
-        # Add weekly pattern (weekend lebih tinggi)
-        weekend_factor = 1.3 if date.weekday() >= 5 else 1.0
-        
-        base_revenue = 50000 + trend + np.random.normal(0, 10000)
-        revenue = max(10000, base_revenue * month_factor * weekend_factor)
-        
-        quantity = max(1, int(revenue / np.random.uniform(50000, 150000)))
-        price = revenue / quantity
-        
-        data.append({
-            'date': date,
-            'product': np.random.choice(products),
-            'category': np.random.choice(categories),
-            'region': np.random.choice(regions),
-            'quantity': quantity,
-            'price': price,
-            'revenue': revenue
+    end_date   = datetime(2024, 12, 31)
+    total_days = (end_date - start_date).days
+
+    records = []
+    for i in range(n_records):
+        day_off = np.random.randint(0, total_days)
+        date    = start_date + timedelta(days=int(day_off))
+
+        month_factor   = 1 + 0.3 * np.sin(2 * np.pi * (date.month - 3) / 12)
+        weekend_factor = 1.25 if date.weekday() >= 5 else 1.0
+        year_trend     = 1.15 if date.year == 2024 else 1.0
+
+        pidx = np.random.choice(len(products), p=prod_w)
+        prod_name, kategori, harga_base, hpp_pct = products[pidx]
+
+        harga   = round(harga_base * np.random.uniform(0.92, 1.05), -2)
+        hpp     = round(harga * hpp_pct, -2)
+        max_qty = max(1, int(5_000_000 / harga_base))
+        qty     = np.random.randint(1, max_qty + 1)
+
+        channel = np.random.choice(channels, p=ch_w)
+        sidx    = np.random.randint(0, len(stores))
+        nama_toko, kota, provinsi = stores[sidx]
+
+        if channel == 'Offline':
+            salesperson = np.random.choice(salespersons)
+            ongkir, courier = 0, '-'
+        else:
+            salesperson = np.random.choice(list(salespersons) + ['Online']*5)
+            ongkir  = np.random.choice([15000,18000,20000,25000,35000])
+            courier = np.random.choice(couriers)
+
+        revenue     = max(harga, round(harga * qty * month_factor * weekend_factor * year_trend, -2))
+        diskon      = round(revenue * np.random.choice([0,0,0,0,0,0.05,0.10,0.15]), -2)
+        grand_total = revenue - diskon
+        status      = np.random.choice(status_pool)
+        customer    = np.random.choice(customers[:40] if np.random.random() < 0.30 else customers)
+        no_order    = f"INV-{date.strftime('%Y%m%d')}-{str(i+1).zfill(5)}"
+
+        records.append({
+            'no_order': no_order, 'tanggal': date.strftime('%Y-%m-%d'),
+            'nama_produk': prod_name, 'kategori': kategori,
+            'harga_satuan': harga, 'hpp': hpp, 'qty': qty,
+            'diskon': diskon, 'ongkir': ongkir, 'grand_total': grand_total,
+            'pelanggan': customer, 'salesperson': salesperson,
+            'nama_toko': nama_toko, 'kota': kota, 'provinsi': provinsi,
+            'channel': channel, 'kurir': courier, 'status': status,
         })
-    
-    df = pd.DataFrame(data)
-    
-    # Add some anomalies
-    anomaly_indices = np.random.choice(len(df), size=int(len(df) * 0.02), replace=False)
-    for idx in anomaly_indices:
-        df.loc[idx, 'revenue'] *= np.random.choice([0.3, 2.5])  # Drop atau spike
-        df.loc[idx, 'quantity'] = int(df.loc[idx, 'revenue'] / df.loc[idx, 'price'])
-    
+
+    df = pd.DataFrame(records).sort_values('tanggal').reset_index(drop=True)
+
+    # Inject anomali ~2%
+    anom_idx = np.random.choice(len(df), size=max(1, int(len(df)*0.02)), replace=False)
+    for idx in anom_idx:
+        df.loc[idx, 'grand_total'] = round(df.loc[idx, 'grand_total'] * np.random.choice([0.10, 5.0]), -2)
+
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
-    
-    logger.info(f"Sample data created: {output_path} ({n_records} records)")
+    logger.info(f"Sample data generated: {len(df):,} records, {output_path}")
     return df
 
 
