@@ -1147,7 +1147,6 @@ def tab_reports():
         st.markdown('</div>', unsafe_allow_html=True)
     with c3:
         st.markdown('<div class="glass-card"><p class="card-title">🎨 PowerPoint Presentation</p>', unsafe_allow_html=True)
-        st.markdown('<p style="color:#7dd3fc;font-size:0.82rem;margin:0 0 12px 0"></p>', unsafe_allow_html=True)
         if st.button("🎨 Generate Presentasi (.pptx)", use_container_width=True):
             with st.spinner("Generating PowerPoint... (30–60 detik)"):
                 try:
