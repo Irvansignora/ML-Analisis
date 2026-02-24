@@ -1335,6 +1335,8 @@ class ReportGenerator:
                     "Letakkan di folder yang sama dengan utils.py."
                 )
             import importlib.util as _ilu
+            # Force reload — buang cache lama agar versi terbaru selalu dipakai
+            sys.modules.pop('generate_pptx_py', None)
             _spec = _ilu.spec_from_file_location("generate_pptx_py", str(_gen_path))
             _mod  = _ilu.module_from_spec(_spec)
             _spec.loader.exec_module(_mod)
