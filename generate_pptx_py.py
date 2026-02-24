@@ -249,10 +249,20 @@ def add_bar_chart(slide, labels: list, values: list,
 
     # Axes
     try:
-        chart.category_axis.tick_labels.font.color.rgb = rgb(200, 230, 255)
-        chart.category_axis.tick_labels.font.size = Pt(4)
-        chart.value_axis.tick_labels.font.color.rgb = rgb(200, 230, 255)
-        chart.value_axis.tick_labels.font.size = Pt(4)
+        chart.category_axis.tick_labels.font.color.rgb = rgb(P['muted'])
+        chart.category_axis.tick_labels.font.size = Pt(7)
+        chart.value_axis.tick_labels.font.color.rgb = rgb(P['muted'])
+        chart.value_axis.tick_labels.font.size = Pt(7)
+    except Exception:
+        pass
+
+    # Data labels — disable to avoid oversized black labels
+    try:
+        plot.series[0].data_labels.showValue = False
+    except Exception:
+        pass
+    try:
+        chart.plots[0].has_data_labels = False
     except Exception:
         pass
 
@@ -291,7 +301,18 @@ def add_line_chart(slide, labels: list, values: list, x, y, w, h, color_hex: str
         pass
     try:
         chart.category_axis.tick_labels.font.color.rgb = rgb(P['muted'])
+        chart.category_axis.tick_labels.font.size = Pt(7)
         chart.value_axis.tick_labels.font.color.rgb = rgb(P['muted'])
+        chart.value_axis.tick_labels.font.size = Pt(7)
+    except Exception:
+        pass
+    # Disable data labels
+    try:
+        chart.plots[0].series[0].data_labels.showValue = False
+    except Exception:
+        pass
+    try:
+        chart.plots[0].has_data_labels = False
     except Exception:
         pass
     return chart_frame
@@ -321,8 +342,19 @@ def add_doughnut_chart(slide, labels: list, values: list, x, y, w, h, colors: li
 
     try:
         chart.has_legend = True
-        chart.legend.font.color.rgb = rgb(200, 230, 255)
-        chart.legend.font.size = Pt(3)
+        chart.legend.font.color.rgb = rgb(P['text'])
+        chart.legend.font.size = Pt(8)
+    except Exception:
+        pass
+
+    # Disable data labels to avoid oversized black labels
+    try:
+        chart.plots[0].has_data_labels = False
+    except Exception:
+        pass
+    try:
+        chart.plots[0].series[0].data_labels.showValue = False
+        chart.plots[0].series[0].data_labels.showCategoryName = False
     except Exception:
         pass
 
@@ -367,10 +399,10 @@ def slide_title(prs, data: dict):
         px = 0.5 + idx * 2.1
         add_card(slide, prs, px, 3.28, 1.9, 0.72)
         add_text_box(slide, val,   px+0.1, 3.34, 1.7, 0.3, font_size=13, bold=True, color_hex=P['blue'])
-        add_text_box(slide, label.upper(), px+0.1, 3.64, 1.7, 0.22, font_size=7, color_hex="#00F0FF")
+        add_text_box(slide, label.upper(), px+0.1, 3.64, 1.7, 0.22, font_size=7, color_hex=P['muted'])
 
     ts = datetime.now().strftime('%d %B %Y')
-    add_text_box(slide, f"Generated: {ts}", 0.5, 5.05, 6, 0.22, font_size=8, color_hex="#00F0FF")
+    add_text_box(slide, f"Generated: {ts}", 0.5, 5.05, 6, 0.22, font_size=8, color_hex=P['muted'])
     add_footer(slide, prs, 1, TOTAL)
 
 
@@ -397,7 +429,7 @@ def slide_agenda(prs, data: dict):
         add_rect(slide, x, y, 0.055, 1.1, P['accent'])
         add_text_box(slide, num,   x+0.13, y+0.1,  0.55, 0.42, font_size=20, bold=True, color_hex=P['accent'])
         add_text_box(slide, title, x+0.72, y+0.1,  3.7,  0.38, font_size=13, bold=True, color_hex=P['white'])
-        add_text_box(slide, sub,   x+0.72, y+0.52, 3.7,  0.38, font_size=10, color_hex="#00F0FF")
+        add_text_box(slide, sub,   x+0.72, y+0.52, 3.7,  0.38, font_size=10, color_hex=P['muted'])
 
     add_footer(slide, prs, 2, TOTAL)
 
