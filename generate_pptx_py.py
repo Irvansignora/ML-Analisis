@@ -249,10 +249,10 @@ def add_bar_chart(slide, labels: list, values: list,
 
     # Axes
     try:
-        chart.category_axis.tick_labels.font.color.rgb = rgb(P['muted'])
-        chart.category_axis.tick_labels.font.size = Pt(6)
-        chart.value_axis.tick_labels.font.color.rgb = rgb(P['muted'])
-        chart.value_axis.tick_labels.font.size = Pt(6)
+        chart.category_axis.tick_labels.font.color.rgb = rgb(255, 255, 255)
+        chart.category_axis.tick_labels.font.size = Pt(4)
+        chart.value_axis.tick_labels.font.color.rgb = rgb(255, 255, 255)
+        chart.value_axis.tick_labels.font.size = Pt(4)
     except Exception:
         pass
 
@@ -321,8 +321,8 @@ def add_doughnut_chart(slide, labels: list, values: list, x, y, w, h, colors: li
 
     try:
         chart.has_legend = True
-        chart.legend.font.color.rgb = rgb(P['text'])
-        chart.legend.font.size = Pt(7)
+        chart.legend.font.color.rgb = rgb(255, 255, 255)
+        chart.legend.font.size = Pt(5)
     except Exception:
         pass
 
