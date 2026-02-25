@@ -573,55 +573,55 @@ class DataPreprocessor:
         
         return df
     
-    # ── STATUS SUCCESS VALUES ─────────────────────────────────────────────────
-    # Hanya baris dengan status ini yang dihitung sebagai revenue.
-    # Baris cancel/return/failed → revenue di-nol, tapi tetap ada di DataFrame
-    # supaya chart distribusi status tetap akurat.
-    STATUS_SUCCESS_VALUES = {
-        'selesai', 'completed', 'complete', 'sukses', 'success',
-        'berhasil', 'lunas', 'paid', 'delivered', 'terkirim',
-        'diterima', 'confirmed', 'terkonfirmasi', 'approved', 'disetujui',
-        'finish', 'done', 'selesai_kirim',
-        'pesanan_selesai', 'order_selesai', 'transaksi_selesai',
-        'order_completed', 'order_done',
-    }
-
     def apply_status_revenue_filter(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Jika ada kolom 'status', set revenue = 0 untuk baris yang bukan sukses/completed.
-
-        - Baris cancel/return TETAP ADA → chart distribusi status akurat
-        - Revenue di-nol-kan → KPI, trend, top produk hanya hitung transaksi berhasil
-        - Kolom 'is_successful_transaction' (bool) ditambahkan sebagai marker
-        """
         df = df.copy()
 
         if 'status' not in df.columns or 'revenue' not in df.columns:
             df['is_successful_transaction'] = True
             return df
 
-        status_norm = df['status'].astype(str).str.lower().str.strip()
-        is_success  = status_norm.isin(self.STATUS_SUCCESS_VALUES)
+        # Normalisasi super agresif
+        status_norm = (
+            df['status']
+            .astype(str)
+            .str.lower()
+            .str.strip()
+            .str.replace(r'[^a-z0-9\s]', ' ', regex=True)
+            .str.replace(r'\s+', ' ', regex=True)
+            .str.strip()
+        )
 
-        # Fallback: jika tidak ada satu pun yang match, anggap semua valid
-        if is_success.sum() == 0:
+        # Keyword sukses yang lebih lengkap + partial match
+        success_keywords = [
+            'selesai', 'completed', 'complete', 'sukses', 'success', 'berhasil',
+            'lunas', 'paid', 'delivered', 'terkirim', 'diterima', 'confirmed',
+            'terkonfirmasi', 'approved', 'disetujui', 'finish', 'done',
+            'pesanan selesai', 'order selesai', 'transaksi selesai', 'order completed'
+        ]
+
+        # Partial match (contains)
+        is_success = status_norm.str.contains('|'.join(success_keywords), case=False, na=False)
+
+        n_success = is_success.sum()
+        n_total = len(df)
+
+        if n_success == 0:
             logger.warning(
-                f"apply_status_revenue_filter: tidak ada nilai status yang cocok. "
-                f"Nilai unik: {status_norm.unique()[:10].tolist()}. "
-                "Revenue tidak difilter (semua dianggap valid)."
+                f"⚠️ TIDAK ADA status yang cocok dengan success keywords. "
+                f"Unique status: {status_norm.unique()[:15].tolist()}. "
+                f"Semua transaksi dianggap sukses (fallback)."
             )
             df['is_successful_transaction'] = True
-            return df
+        else:
+            n_zeroed = n_total - n_success
+            if n_zeroed > 0:
+                df.loc[~is_success, 'revenue'] = 0
+                logger.info(
+                    f"✅ Status filter aktif: {n_zeroed:,} baris non-sukses di-zero revenue. "
+                    f"({n_success:,}/{n_total:,} sukses)"
+                )
+            df['is_successful_transaction'] = is_success
 
-        n_zeroed = (~is_success).sum()
-        if n_zeroed > 0:
-            df.loc[~is_success, 'revenue'] = 0
-            logger.info(
-                f"apply_status_revenue_filter: {n_zeroed} baris non-sukses di-nol revenue-nya "
-                f"(status: {status_norm[~is_success].value_counts().to_dict()})"
-            )
-
-        df['is_successful_transaction'] = is_success
         return df
 
     def calculate_revenue(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -696,16 +696,11 @@ class DataPreprocessor:
             # Price tier
             price_q25 = df['price'].quantile(0.25)
             price_q75 = df['price'].quantile(0.75)
-            # BUG FIX: pd.cut gagal kalau q25 == q75 (semua harga sama) → pakai duplicates='drop'
-            try:
-                df['price_tier'] = pd.cut(
-                    df['price'],
-                    bins=[0, price_q25, price_q75, float('inf')],
-                    labels=['Low', 'Medium', 'High'],
-                    duplicates='drop'
-                )
-            except Exception:
-                df['price_tier'] = 'Medium'
+            df['price_tier'] = pd.cut(
+                df['price'],
+                bins=[0, price_q25, price_q75, float('inf')],
+                labels=['Low', 'Medium', 'High']
+            )
         
         # Product performance features
         if 'product' in df.columns:
@@ -761,12 +756,10 @@ class DataPreprocessor:
         
         # 5. Kalkulasi revenue
         df = self.calculate_revenue(df)
-        
-        # 5b. BUG FIX: jika ada kolom 'status', zero-out revenue baris non-sukses.
-        #     Baris cancel/return tetap ada untuk chart status, tapi revenue-nya 0
-        #     sehingga KPI & trend hanya hitung transaksi berhasil.
+
+        # 5b. Filter revenue berdasarkan status — non-sukses di-zero, bukan di-drop
         df = self.apply_status_revenue_filter(df)
-        
+
         # 6. Feature engineering
         df = self.feature_engineering(df)
         
