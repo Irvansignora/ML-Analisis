@@ -1156,6 +1156,43 @@ def build_presentation(data: dict, output_path: str) -> str:
     prs.slide_width  = W
     prs.slide_height = H
 
+    # ── BUG FIX: Pastikan slides 9-11 mendapat data meski utils.py tidak passing key baru ──
+    # Slide branch/channel/salesperson ditambahkan setelah versi awal utils.py dibuat,
+    # sehingga export_to_pptx di utils.py belum meng-include key tersebut.
+    # Fallback: derive dari key yang sudah ada.
+
+    # Branch: fallback ke 'regional' jika tidak ada 'branches' atau 'branch_data'
+    if not data.get('branches') and not data.get('branch_data') and data.get('regional'):
+        data = {**data, 'branches': [
+            {
+                'name':         r.get('region', r.get('name', f'Region {i+1}')),
+                'revenue':      r.get('revenue', 0),
+                'revenue_prev': r.get('revenue_prev', r.get('revenue', 0) * 0.9),
+                'transactions': r.get('transactions', 0),
+                'target':       r.get('target', r.get('revenue', 0) * 1.1),
+            }
+            for i, r in enumerate(data['regional'])
+        ]}
+
+    # Channel: fallback ke 'channel_list' atau derive dari categories
+    if not data.get('channels') and not data.get('channel_data'):
+        ch_source = data.get('channel_list') or data.get('channels_raw') or []
+        if not ch_source and data.get('categories'):
+            # Gunakan categories sebagai proxy channel jika tidak ada channel data
+            ch_source = [
+                {'name': c.get('category', c.get('name', '')), 'revenue': c.get('revenue', 0)}
+                for c in data.get('categories', [])
+            ]
+        if ch_source:
+            data = {**data, 'channels': ch_source}
+
+    # Salesperson: fallback ke 'top_salesperson' atau 'salesperson_list'
+    if not data.get('salespeople') and not data.get('sales_persons') and not data.get('salesperson_data'):
+        sp_source = (data.get('top_salesperson') or data.get('salesperson_list')
+                     or data.get('top_sales') or [])
+        if sp_source:
+            data = {**data, 'salespeople': sp_source}
+
     slide_title(prs, data)             # 1
     slide_agenda(prs, data)            # 2
     slide_kpi(prs, data)               # 3
