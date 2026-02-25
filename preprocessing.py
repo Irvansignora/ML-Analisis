@@ -573,6 +573,62 @@ class DataPreprocessor:
         
         return df
     
+    # ── STATUS VALUES YANG DIANGGAP "SUKSES / COMPLETED" ─────────────────────────
+    # Hanya baris dengan status ini yang dihitung sebagai revenue.
+    # Baris cancel, return, failed → revenue di-set 0 (transaksi tetap ada untuk chart status).
+    STATUS_SUCCESS_VALUES = {
+        'selesai', 'completed', 'complete', 'sukses', 'success',
+        'berhasil', 'lunas', 'paid', 'delivered', 'terkirim',
+        'diterima', 'confirmed', 'terkonfirmasi', 'approved', 'disetujui',
+        'finish', 'done', 'selesai_kirim',
+        # marketplace-specific
+        'pesanan_selesai', 'order_selesai', 'transaksi_selesai',
+        'order_completed', 'order_done',
+    }
+
+    def apply_status_revenue_filter(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Jika ada kolom 'status', set revenue = 0 untuk baris yang bukan sukses/completed.
+
+        Tujuan:
+        - Baris cancelled/return/failed tetap EXIST di DataFrame
+          → chart status transaksi tetap akurat (jumlah tiap status tampil benar)
+        - Tapi revenue-nya di-nol-kan agar KPI, trend, top produk, dll
+          hanya menghitung transaksi yang benar-benar berhasil.
+
+        Returns DataFrame dengan kolom 'is_successful_transaction' (bool).
+        """
+        df = df.copy()
+
+        if 'status' not in df.columns or 'revenue' not in df.columns:
+            df['is_successful_transaction'] = True
+            return df
+
+        status_norm = df['status'].astype(str).str.lower().str.strip()
+        is_success = status_norm.isin(self.STATUS_SUCCESS_VALUES)
+
+        # Heuristic tambahan: jika tidak ada satu pun match, mungkin nilai uniknya
+        # tidak ada dalam daftar → jangan zero-out semua (fallback: anggap semua sukses)
+        if is_success.sum() == 0:
+            logger.warning(
+                "apply_status_revenue_filter: tidak ada nilai status yang cocok dengan "
+                f"STATUS_SUCCESS_VALUES. Nilai unik: {status_norm.unique()[:10].tolist()}. "
+                "Revenue tidak di-filter (semua dianggap valid)."
+            )
+            df['is_successful_transaction'] = True
+            return df
+
+        n_zeroed = (~is_success).sum()
+        if n_zeroed > 0:
+            df.loc[~is_success, 'revenue'] = 0
+            logger.info(
+                f"apply_status_revenue_filter: {n_zeroed} baris non-sukses di-nol revenue-nya "
+                f"(status: {status_norm[~is_success].value_counts().to_dict()})"
+            )
+
+        df['is_successful_transaction'] = is_success
+        return df
+
     def calculate_revenue(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Kalkulasi revenue jika belum ada. Coba berbagai kombinasi kolom.
@@ -705,6 +761,11 @@ class DataPreprocessor:
         
         # 5. Kalkulasi revenue
         df = self.calculate_revenue(df)
+        
+        # 5b. BUG FIX: Jika ada kolom 'status', zero-out revenue baris non-sukses.
+        #     Baris cancel/return/failed tetap ada (untuk chart status distribusi),
+        #     tapi revenue-nya di-nol agar KPI & trend hanya hitung transaksi berhasil.
+        df = self.apply_status_revenue_filter(df)
         
         # 6. Feature engineering
         df = self.feature_engineering(df)
