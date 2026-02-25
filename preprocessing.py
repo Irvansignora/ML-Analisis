@@ -615,9 +615,12 @@ class DataPreprocessor:
         else:
             n_zeroed = n_total - n_success
             if n_zeroed > 0:
-                df.loc[~is_success, 'revenue'] = 0
+                # PERBAIKAN: revenue asli TIDAK di-zero agar chart "Revenue per Status"
+                # bisa menampilkan nilai aktual untuk setiap status (RETURNED, SHIPPED, dll).
+                # Kolom is_successful_transaction tetap di-set sebagai flag untuk filter lain.
                 logger.info(
-                    f"✅ Status filter aktif: {n_zeroed:,} baris non-sukses di-zero revenue. "
+                    f"✅ Status filter: {n_zeroed:,} baris non-sukses diidentifikasi. "
+                    f"Revenue asli tetap disimpan untuk analisis per-status. "
                     f"({n_success:,}/{n_total:,} sukses)"
                 )
             df['is_successful_transaction'] = is_success
