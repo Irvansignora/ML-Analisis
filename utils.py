@@ -1323,6 +1323,14 @@ class ReportGenerator:
         # Tidak perlu Node.js — bekerja di Streamlit Cloud & semua environment
         try:
             import sys as _sys, importlib.util as _ilu
+
+            # ── BUG FIX: bersihkan SEMUA cache terkait generate_pptx_py ────
+            # Streamlit punya internal module cache sendiri — tanpa ini, versi
+            # lama (9 slide) bisa terus terpakai meski file sudah diupdate ke 12 slide.
+            for _key in list(_sys.modules.keys()):
+                if 'generate_pptx_py' in _key:
+                    del _sys.modules[_key]
+
             # Cari generate_pptx_py di folder yang sama dengan utils.py
             _gen_candidates = [
                 Path(__file__).parent / 'generate_pptx_py.py',
@@ -1334,12 +1342,22 @@ class ReportGenerator:
                     "generate_pptx_py.py tidak ditemukan. "
                     "Letakkan di folder yang sama dengan utils.py."
                 )
-            # Selalu buang cache lama → paksa baca file terbaru dari disk setiap kali
-            _sys.modules.pop('generate_pptx_py', None)
+
+            # Load module fresh dari disk — TIDAK di-cache ke sys.modules
             _spec = _ilu.spec_from_file_location('generate_pptx_py', str(_gen_path))
             _mod  = _ilu.module_from_spec(_spec)
-            # Jangan register ke sys.modules agar tidak di-cache Streamlit
-            _spec.loader.exec_module(_mod)
+            # Register sementara supaya relative import di dalam module bisa resolve
+            _sys.modules['generate_pptx_py'] = _mod
+            try:
+                _spec.loader.exec_module(_mod)
+            finally:
+                # Hapus dari cache setelah exec agar Streamlit tidak pakai versi lama
+                _sys.modules.pop('generate_pptx_py', None)
+
+            # Verifikasi jumlah slide sebelum generate (debugging aid)
+            _total_slides = getattr(_mod, 'TOTAL', '?')
+            logger.info(f"generate_pptx_py loaded dari: {_gen_path}  |  TOTAL slides: {_total_slides}")
+
             _mod.build_presentation(payload, output_path)
         except ImportError as e:
             raise RuntimeError(
