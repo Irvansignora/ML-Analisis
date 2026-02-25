@@ -410,36 +410,13 @@ def tab_kpi():
     df = get_df()
     if df is None: return empty("📂","Belum ada data","Upload file atau load sample data")
 
-    # ── BUG FIX: Tampilkan info status filter ─────────────────────────────────
-    # Revenue sudah di-zero untuk non-sukses oleh preprocessing.apply_status_revenue_filter
-    # Kolom 'is_successful_transaction' adalah marker-nya
-    if 'status' in df.columns:
-        if 'is_successful_transaction' in df.columns:
-            n_success = int(df['is_successful_transaction'].sum())
-            n_total   = len(df)
-            n_failed  = n_total - n_success
-            pct_ok    = n_success / n_total * 100 if n_total else 0
-            st.info(
-                f"✅ **Status filter aktif** — Revenue hanya dihitung dari "
-                f"**{n_success:,} transaksi sukses** ({pct_ok:.1f}%). "
-                f"{n_failed:,} transaksi cancel/return/failed di-exclude dari revenue. "
-                f"Lihat tab **Sales Performance** untuk chart distribusi status lengkap."
-            )
-        else:
-            st.warning(
-                "⚠️ Kolom 'status' terdeteksi tapi preprocessing belum memfilter revenue. "
-                "Re-upload data untuk mengaktifkan filter status."
-            )
-
+    # BUG FIX: revenue sudah di-zero untuk non-sukses oleh preprocessing
     rev = df['revenue'].sum() if 'revenue' in df.columns else 0
     qty = df['quantity'].sum() if 'quantity' in df.columns else 0
     txn = len(df)
-    # BUG FIX: AOV harus berdasarkan transaksi sukses saja
-    if 'is_successful_transaction' in df.columns:
-        txn_success = int(df['is_successful_transaction'].sum())
-    else:
-        txn_success = txn
-    aov = rev / txn_success if txn_success else 0
+    # AOV harus berdasarkan transaksi sukses saja
+    txn_ok = int(df['is_successful_transaction'].sum()) if 'is_successful_transaction' in df.columns else txn
+    aov = rev / txn_ok if txn_ok else 0
 
     cost_col = 'cost' if 'cost' in df.columns else ('hpp' if 'hpp' in df.columns else None)
     if cost_col:
@@ -460,12 +437,8 @@ def tab_kpi():
     with c1: kpi('c1','💰', format_currency(rev), 'Total Revenue',
                  f"{mom:.1f}% vs bln lalu" if mom is not None else None, mom >= 0 if mom else True)
     with c2: kpi('c2','📦', format_number(qty), 'Total Qty Terjual')
-    with c3:
-        if 'is_successful_transaction' in df.columns and txn_success != txn:
-            kpi('c3','🧾', format_number(txn_success), 'Transaksi Sukses',
-                f"{txn:,} total termasuk cancel", True)
-        else:
-            kpi('c3','🧾', format_number(txn), 'Total Transaksi')
+    with c3: kpi('c3','🧾', format_number(txn_ok), 'Transaksi Sukses' if 'is_successful_transaction' in df.columns else 'Total Transaksi',
+                 f"dari {txn:,} total" if 'is_successful_transaction' in df.columns and txn_ok != txn else None, True)
     with c4: kpi('c4','🛒', format_currency(aov), 'Avg Order Value (AOV)')
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -481,6 +454,28 @@ def tab_kpi():
                  None, yoy >= 0 if yoy is not None else True)
 
     st.markdown("<br>", unsafe_allow_html=True)
+
+    # === BUG FIX: STATUS DISTRIBUTION CHART ===
+    if 'status' in df.columns:
+        section("📊 Distribusi Status Transaksi")
+
+        status_count = df['status'].value_counts().reset_index()
+        status_count.columns = ['Status', 'Jumlah']
+
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            fig = px.pie(
+                status_count,
+                names='Status',
+                values='Jumlah',
+                hole=0.4,
+                color_discrete_sequence=px.colors.qualitative.Set2
+            )
+            fig.update_traces(textinfo='percent+label')
+            ct(fig, "Distribusi Status Transaksi")
+            st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            st.dataframe(status_count, use_container_width=True, hide_index=True)
 
     section("📈 Tren Penjualan")
     if 'date' in df.columns:
