@@ -410,25 +410,36 @@ def tab_kpi():
     df = get_df()
     if df is None: return empty("📂","Belum ada data","Upload file atau load sample data")
 
-    # BUG FIX: Jika ada kolom status, tampilkan info dan pastikan revenue sudah difilter
-    # (filtering dilakukan di preprocessing.apply_status_revenue_filter — revenue baris non-sukses = 0)
-    if 'status' in df.columns and 'is_successful_transaction' in df.columns:
-        n_success = df['is_successful_transaction'].sum()
-        n_total   = len(df)
-        n_failed  = n_total - n_success
-        pct_ok    = n_success / n_total * 100 if n_total else 0
-        st.info(
-            f"ℹ️ **Status filter aktif** — Revenue dihitung dari **{n_success:,} transaksi sukses** "
-            f"({pct_ok:.1f}%) dari total {n_total:,} transaksi. "
-            f"{n_failed:,} transaksi cancel/return/failed di-exclude dari revenue."
-        )
-    elif 'status' in df.columns:
-        st.warning("⚠️ Kolom status ditemukan tapi belum difilter — coba re-upload data.")
+    # ── BUG FIX: Tampilkan info status filter ─────────────────────────────────
+    # Revenue sudah di-zero untuk non-sukses oleh preprocessing.apply_status_revenue_filter
+    # Kolom 'is_successful_transaction' adalah marker-nya
+    if 'status' in df.columns:
+        if 'is_successful_transaction' in df.columns:
+            n_success = int(df['is_successful_transaction'].sum())
+            n_total   = len(df)
+            n_failed  = n_total - n_success
+            pct_ok    = n_success / n_total * 100 if n_total else 0
+            st.info(
+                f"✅ **Status filter aktif** — Revenue hanya dihitung dari "
+                f"**{n_success:,} transaksi sukses** ({pct_ok:.1f}%). "
+                f"{n_failed:,} transaksi cancel/return/failed di-exclude dari revenue. "
+                f"Lihat tab **Sales Performance** untuk chart distribusi status lengkap."
+            )
+        else:
+            st.warning(
+                "⚠️ Kolom 'status' terdeteksi tapi preprocessing belum memfilter revenue. "
+                "Re-upload data untuk mengaktifkan filter status."
+            )
 
     rev = df['revenue'].sum() if 'revenue' in df.columns else 0
     qty = df['quantity'].sum() if 'quantity' in df.columns else 0
     txn = len(df)
-    aov = rev / txn if txn else 0
+    # BUG FIX: AOV harus berdasarkan transaksi sukses saja
+    if 'is_successful_transaction' in df.columns:
+        txn_success = int(df['is_successful_transaction'].sum())
+    else:
+        txn_success = txn
+    aov = rev / txn_success if txn_success else 0
 
     cost_col = 'cost' if 'cost' in df.columns else ('hpp' if 'hpp' in df.columns else None)
     if cost_col:
@@ -449,7 +460,12 @@ def tab_kpi():
     with c1: kpi('c1','💰', format_currency(rev), 'Total Revenue',
                  f"{mom:.1f}% vs bln lalu" if mom is not None else None, mom >= 0 if mom else True)
     with c2: kpi('c2','📦', format_number(qty), 'Total Qty Terjual')
-    with c3: kpi('c3','🧾', format_number(txn), 'Total Transaksi')
+    with c3:
+        if 'is_successful_transaction' in df.columns and txn_success != txn:
+            kpi('c3','🧾', format_number(txn_success), 'Transaksi Sukses',
+                f"{txn:,} total termasuk cancel", True)
+        else:
+            kpi('c3','🧾', format_number(txn), 'Total Transaksi')
     with c4: kpi('c4','🛒', format_currency(aov), 'Avg Order Value (AOV)')
 
     st.markdown("<br>", unsafe_allow_html=True)
