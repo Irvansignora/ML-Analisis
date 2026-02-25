@@ -145,10 +145,18 @@ class DataPreprocessor:
             'kurir', 'courier', 'ekspedisi', 'jasa_kirim', 'pengiriman',
             'shipping_courier', 'nama_kurir',
         ],
+        # ── Salesperson ── (SEBELUM status agar tidak nyasar)
+        'salesperson': [
+            'salesperson', 'sales_person', 'sales', 'nama_sales', 'agen',
+            'sales_name', 'nama_agen', 'nama_salesperson',
+            'marketing', 'nama_marketing', 'marketer',
+            'staff_penjualan', 'petugas_penjualan',
+        ],
         # ── Status ──
         'status': [
             'status', 'status_order', 'status_transaksi', 'status_pembayaran',
-            'kondisi', 'order_status',
+            'kondisi', 'order_status', 'transaction_status', 'payment_status',
+            'status_pengiriman', 'status_penjualan',
         ],
         # ── Discount ──
         'discount': [
@@ -181,6 +189,16 @@ class DataPreprocessor:
         'qty', 'jumlah', 'quantity',
         'diskon', 'discount', 'ongkir', 'pajak', 'tax',
         'invoice', 'faktur', 'order', 'transaksi',
+        'sales', 'salesperson', 'agen', 'marketing',
+    ]
+
+    # Keyword yang DILARANG untuk partial match customer
+    # → hindari 'salesperson', 'status' dll nyasar ke customer
+    _CUSTOMER_PARTIAL_BLACKLIST = [
+        'sales', 'salesperson', 'agen', 'marketing', 'marketer',
+        'status', 'kondisi', 'channel', 'kurir', 'courier',
+        'produk', 'product', 'barang', 'item',
+        'toko', 'store', 'outlet',
     ]
     
     def __init__(self):
@@ -290,6 +308,13 @@ class DataPreprocessor:
                     col_words = set(col.split('_'))
                     if col_words & blacklist:
                         continue  # skip - kolom ini bukan produk
+
+                # Untuk 'customer': tolak kolom yang mengandung kata dari customer blacklist
+                if standard_name == 'customer':
+                    col_words = set(col.split('_'))
+                    cust_bl = {b.lower() for b in self._CUSTOMER_PARTIAL_BLACKLIST}
+                    if col_words & cust_bl:
+                        continue  # skip - kolom ini bukan customer
                 
                 # Cek substring match (var ada di dalam col, atau col ada di dalam var)
                 for var in var_set:
