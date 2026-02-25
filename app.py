@@ -418,11 +418,13 @@ def tab_kpi():
     txn_ok = int(df['is_successful_transaction'].sum()) if 'is_successful_transaction' in df.columns else txn
     aov = rev / txn_ok if txn_ok else 0
 
-    cost_col = 'cost' if 'cost' in df.columns else ('hpp' if 'hpp' in df.columns else None)
+    cost_col = next((c for c in ['cost','hpp','harga_pokok','cogs'] if c in df.columns), None)
     if cost_col:
         gross_profit = rev - df[cost_col].sum()
     else:
-        gross_profit = rev * 0.30
+        # Pakai margin yg sudah di-set user di tab Profitability, default 30%
+        fallback_margin = st.session_state.get('manual_margin_pct', 30) / 100
+        gross_profit    = rev * fallback_margin
     margin_pct = (gross_profit / rev * 100) if rev else 0
 
     mom, yoy = None, None
@@ -707,21 +709,44 @@ def tab_profit():
 
     cost_col = next((c for c in ['cost','hpp','harga_pokok','cogs'] if c in df.columns), None)
     df2 = df.copy()
+
     if cost_col:
         df2['profit'] = df2['revenue'] - df2[cost_col]
         df2['margin'] = df2['profit'] / df2['revenue'] * 100
-        st.info(f"✅ Menggunakan kolom **{cost_col}** untuk kalkulasi profit")
+        st.info(f"✅ Menggunakan kolom **{cost_col}** untuk kalkulasi profit aktual.")
     else:
-        st.warning("⚠️ Kolom HPP/Cost tidak ditemukan. Margin diestimasi per produk (15–45%).")
-        if 'product' in df2.columns:
-            np.random.seed(42)
-            products = df2['product'].unique()
-            margin_map = {p: np.random.uniform(0.15, 0.45) for p in products}
-            df2['margin_rate'] = df2['product'].map(margin_map)
-        else:
-            df2['margin_rate'] = 0.30
-        df2['profit'] = df2['revenue'] * df2['margin_rate']
-        df2['margin'] = df2['margin_rate'] * 100
+        # Tidak ada kolom HPP — tampilkan input margin manual
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown('<p class="card-title">⚙️ Estimasi Margin (Kolom HPP tidak ditemukan)</p>', unsafe_allow_html=True)
+        cc1, cc2 = st.columns([2, 1])
+        with cc1:
+            manual_margin = st.slider(
+                "Asumsi Profit Margin (%)",
+                min_value=1, max_value=90,
+                value=st.session_state.get('manual_margin_pct', 30),
+                step=1,
+                help="Masukkan estimasi margin keuntungan bisnis kamu. Contoh: retail 20–35%, F&B 60–70%, jasa 40–60%."
+            )
+            st.session_state.manual_margin_pct = manual_margin
+        with cc2:
+            st.markdown(f"""
+            <div style="text-align:center;padding:12px;">
+                <p style="color:#94a3b8;font-size:0.78rem;margin:0;">Margin dipilih</p>
+                <p style="color:#10b981;font-size:2rem;font-weight:800;margin:4px 0;">{manual_margin}%</p>
+                <p style="color:#94a3b8;font-size:0.72rem;margin:0;">dari revenue</p>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown("""
+        <p style="color:#64748b;font-size:0.78rem;margin:8px 0 0;">
+        💡 Referensi: Retail 20–35% · F&B 60–70% · Fashion 40–55% · Jasa 40–60% · Elektronik 10–20%
+        </p>""", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        margin_rate        = manual_margin / 100
+        df2['margin_rate'] = margin_rate
+        df2['profit']      = df2['revenue'] * margin_rate
+        df2['margin']      = manual_margin
 
     total_rev  = df2['revenue'].sum()
     total_prof = df2['profit'].sum()
@@ -730,7 +755,8 @@ def tab_profit():
     c1,c2,c3 = st.columns(3)
     with c1: kpi('c1','💰', format_currency(total_rev), 'Total Revenue')
     with c2: kpi('c2','💎', format_currency(total_prof), 'Gross Profit')
-    with c3: kpi('c3','📈', f"{avg_margin:.1f}%", 'Avg Margin')
+    with c3: kpi('c3','📈', f"{avg_margin:.1f}%",
+                 'Avg Margin' if cost_col else 'Margin (Estimasi Manual)')
 
     st.markdown("<br>", unsafe_allow_html=True)
 
