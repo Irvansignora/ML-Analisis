@@ -132,148 +132,6 @@ class SalesForecaster:
         
         return X, y
     
-    def fit(self, df: pd.DataFrame, target_col: str = 'revenue', 
-            test_size: float = 0.2, do_tuning: bool = False) -> Dict:
-        """
-        Train model
-        
-        Parameters:
-        -----------
-        df : pd.DataFrame
-            DataFrame training
-        target_col : str
-            Kolom target
-        test_size : float
-            Proporsi data test
-        do_tuning : bool
-            Jika True, lakukan hyperparameter tuning
-            
-        Returns:
-        --------
-        dict
-            Metrics evaluasi
-        """
-        logger.info(f"Training {self.model_type} model...")
-        
-        if self.model_type == 'prophet':
-            return self._fit_prophet(df, target_col)
-        
-        # Prepare features
-        X, y = self.prepare_features(df, target_col)
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=42, shuffle=False
-        )
-        
-        # Scale features
-        X_train_scaled_arr = self.scaler.fit_transform(X_train)
-        X_test_scaled_arr  = self.scaler.transform(X_test)
-        
-        # BUG FIX: LightGBM & XGBoost ditraining dengan feature names (DataFrame),
-        # tapi scaler.transform() mengembalikan numpy array -> menyebabkan warning.
-        # Solusi: bungkus kembali ke DataFrame dengan nama kolom yang sama.
-        X_train_scaled = pd.DataFrame(X_train_scaled_arr, columns=X_train.columns, index=X_train.index)
-        X_test_scaled  = pd.DataFrame(X_test_scaled_arr,  columns=X_test.columns,  index=X_test.index)
-        
-        # Initialize model
-        if self.model_type == 'linear':
-            self.model = LinearRegression()
-        elif self.model_type == 'ridge':
-            self.model = Ridge(alpha=1.0)
-        elif self.model_type == 'lasso':
-            self.model = Lasso(alpha=1.0, max_iter=10000)
-        elif self.model_type == 'random_forest':
-            self.model = RandomForestRegressor(n_estimators=200, random_state=42,
-                                               n_jobs=-1, min_samples_leaf=2)
-        elif self.model_type == 'extra_trees':
-            self.model = ExtraTreesRegressor(n_estimators=200, random_state=42,
-                                             n_jobs=-1, min_samples_leaf=2)
-        elif self.model_type == 'gradient_boosting':
-            self.model = GradientBoostingRegressor(n_estimators=200, random_state=42,
-                                                    learning_rate=0.05, max_depth=5,
-                                                    subsample=0.8)
-        elif self.model_type == 'xgboost':
-            if XGBOOST_AVAILABLE:
-                self.model = xgb.XGBRegressor(n_estimators=300, random_state=42,
-                                               n_jobs=-1, learning_rate=0.05,
-                                               max_depth=6, subsample=0.8,
-                                               colsample_bytree=0.8, tree_method='hist')
-            else:
-                logger.warning("XGBoost tidak tersedia, menggunakan GradientBoosting")
-                self.model = GradientBoostingRegressor(n_estimators=200, random_state=42,
-                                                        learning_rate=0.05)
-        elif self.model_type == 'lightgbm':
-            if LIGHTGBM_AVAILABLE:
-                self.model = lgb.LGBMRegressor(n_estimators=300, random_state=42,
-                                                n_jobs=-1, learning_rate=0.05,
-                                                num_leaves=63, subsample=0.8,
-                                                colsample_bytree=0.8, verbose=-1)
-            else:
-                logger.warning("LightGBM tidak tersedia, menggunakan GradientBoosting")
-                self.model = GradientBoostingRegressor(n_estimators=200, random_state=42,
-                                                        learning_rate=0.05)
-        elif self.model_type == 'ensemble':
-            # Voting Ensemble dari model-model terbaik
-            estimators = [
-                ('rf', RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1)),
-                ('gb', GradientBoostingRegressor(n_estimators=200, random_state=42,
-                                                  learning_rate=0.05)),
-                ('et', ExtraTreesRegressor(n_estimators=200, random_state=42, n_jobs=-1))
-            ]
-            if XGBOOST_AVAILABLE:
-                estimators.append(('xgb', xgb.XGBRegressor(n_estimators=200, random_state=42,
-                                                              n_jobs=-1, learning_rate=0.05,
-                                                              tree_method='hist')))
-            self.model = VotingRegressor(estimators=estimators, n_jobs=-1)
-        elif self.model_type == 'stacking':
-            # Stacking: base learners + meta learner Ridge
-            estimators = [
-                ('rf', RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)),
-                ('gb', GradientBoostingRegressor(n_estimators=100, random_state=42,
-                                                  learning_rate=0.1)),
-                ('et', ExtraTreesRegressor(n_estimators=100, random_state=42, n_jobs=-1))
-            ]
-            if XGBOOST_AVAILABLE:
-                estimators.append(('xgb', xgb.XGBRegressor(n_estimators=100, random_state=42,
-                                                              n_jobs=-1, tree_method='hist')))
-            self.model = StackingRegressor(
-                estimators=estimators,
-                final_estimator=Ridge(alpha=1.0),
-                n_jobs=-1,
-                cv=3
-            )
-        else:
-            raise ValueError(f"Model type tidak dikenal: {self.model_type}. Pilihan: {self.AVAILABLE_MODELS}")
-        
-        # Hyperparameter tuning
-        if do_tuning and self.model_type in ['random_forest', 'xgboost']:
-            self._hyperparameter_tuning(X_train_scaled, y_train)
-        
-        # Train
-        self.model.fit(X_train_scaled, y_train)
-        
-        # Predict
-        y_pred_train = self.model.predict(X_train_scaled)
-        y_pred_test = self.model.predict(X_test_scaled)
-        
-        # Calculate metrics
-        self.metrics = {
-            'train_mae': mean_absolute_error(y_train, y_pred_train),
-            'train_rmse': float(np.sqrt(mean_squared_error(y_train, y_pred_train))),
-            'train_r2': r2_score(y_train, y_pred_train),
-            'train_mape': float(mean_absolute_percentage_error(y_train, y_pred_train) * 100),
-            'test_mae': mean_absolute_error(y_test, y_pred_test),
-            'test_rmse': float(np.sqrt(mean_squared_error(y_test, y_pred_test))),
-            'test_r2': r2_score(y_test, y_pred_test),
-            'test_mape': float(mean_absolute_percentage_error(y_test, y_pred_test) * 100),
-        }
-        
-        self.is_fitted = True
-        logger.info(f"Training completed. Test RMSE: {self.metrics['test_rmse']:.2f}")
-        
-        return self.metrics
-    
     def _fit_prophet(self, df: pd.DataFrame, target_col: str) -> Dict:
         """
         Train Prophet model untuk time series
@@ -419,74 +277,235 @@ class SalesForecaster:
         
         return self.model.predict(X_scaled)
     
+    def _build_daily_series(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Aggregate data transaksi ke level harian dan tambahkan lag/rolling features.
+        Ini fondasi untuk autoregressive forecast yang realistis.
+        """
+        daily = (
+            df.groupby(df['date'].dt.date)['revenue']
+            .sum()
+            .reset_index()
+            .rename(columns={'date': 'date', 'revenue': 'revenue'})
+        )
+        daily['date'] = pd.to_datetime(daily['date'])
+        daily = daily.sort_values('date').reset_index(drop=True)
+
+        # Time features
+        daily['year']         = daily['date'].dt.year
+        daily['month']        = daily['date'].dt.month
+        daily['quarter']      = daily['date'].dt.quarter
+        daily['day_of_week']  = daily['date'].dt.dayofweek
+        daily['day_of_month'] = daily['date'].dt.day
+        daily['week_of_year'] = daily['date'].dt.isocalendar().week.astype(int)
+        daily['is_weekend']   = daily['day_of_week'].isin([5, 6]).astype(int)
+
+        # Lag & rolling features — ini yang bikin model bisa "ingat" pola historis
+        daily['lag_1']        = daily['revenue'].shift(1)
+        daily['lag_7']        = daily['revenue'].shift(7)
+        daily['lag_14']       = daily['revenue'].shift(14)
+        daily['lag_30']       = daily['revenue'].shift(30)
+        daily['rolling_7']    = daily['revenue'].shift(1).rolling(7,  min_periods=1).mean()
+        daily['rolling_14']   = daily['revenue'].shift(1).rolling(14, min_periods=1).mean()
+        daily['rolling_30']   = daily['revenue'].shift(1).rolling(30, min_periods=1).mean()
+        daily['rolling_std7'] = daily['revenue'].shift(1).rolling(7,  min_periods=1).std().fillna(0)
+
+        # Trend sederhana: slope revenue 7 hari terakhir
+        daily['trend_7'] = daily['revenue'].shift(1).rolling(7, min_periods=2).apply(
+            lambda x: np.polyfit(range(len(x)), x, 1)[0] if len(x) >= 2 else 0,
+            raw=True
+        ).fillna(0)
+
+        return daily.dropna(subset=['lag_1']).reset_index(drop=True)
+
+    def fit(self, df: pd.DataFrame, target_col: str = 'revenue',
+            test_size: float = 0.2, do_tuning: bool = False) -> Dict:
+        """
+        Train model menggunakan daily aggregated time series dengan lag features.
+        """
+        logger.info(f"Training {self.model_type} model...")
+
+        if self.model_type == 'prophet':
+            return self._fit_prophet(df, target_col)
+
+        # Simpan daily series untuk dipakai saat forecast
+        self._daily_series = self._build_daily_series(df)
+
+        DAILY_FEATURE_COLS = [
+            'year', 'month', 'quarter', 'day_of_week', 'day_of_month',
+            'week_of_year', 'is_weekend',
+            'lag_1', 'lag_7', 'lag_14', 'lag_30',
+            'rolling_7', 'rolling_14', 'rolling_30', 'rolling_std7', 'trend_7'
+        ]
+        self.feature_columns = DAILY_FEATURE_COLS
+
+        X = self._daily_series[DAILY_FEATURE_COLS].fillna(0)
+        y = self._daily_series['revenue']
+
+        # Time-series split (no shuffle)
+        split = int(len(X) * (1 - test_size))
+        X_train, X_test = X.iloc[:split], X.iloc[split:]
+        y_train, y_test = y.iloc[:split], y.iloc[split:]
+
+        X_train_arr = self.scaler.fit_transform(X_train)
+        X_test_arr  = self.scaler.transform(X_test)
+        X_train_scaled = pd.DataFrame(X_train_arr, columns=DAILY_FEATURE_COLS, index=X_train.index)
+        X_test_scaled  = pd.DataFrame(X_test_arr,  columns=DAILY_FEATURE_COLS, index=X_test.index)
+
+        # Build model (sama seperti sebelumnya)
+        if self.model_type == 'linear':
+            self.model = LinearRegression()
+        elif self.model_type == 'ridge':
+            self.model = Ridge(alpha=1.0)
+        elif self.model_type == 'lasso':
+            self.model = Lasso(alpha=1.0, max_iter=10000)
+        elif self.model_type == 'random_forest':
+            self.model = RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1, min_samples_leaf=2)
+        elif self.model_type == 'extra_trees':
+            self.model = ExtraTreesRegressor(n_estimators=200, random_state=42, n_jobs=-1, min_samples_leaf=2)
+        elif self.model_type == 'gradient_boosting':
+            self.model = GradientBoostingRegressor(n_estimators=200, random_state=42, learning_rate=0.05, max_depth=5, subsample=0.8)
+        elif self.model_type == 'xgboost':
+            if XGBOOST_AVAILABLE:
+                self.model = xgb.XGBRegressor(n_estimators=300, random_state=42, n_jobs=-1, learning_rate=0.05,
+                                               max_depth=6, subsample=0.8, colsample_bytree=0.8, tree_method='hist')
+            else:
+                logger.warning("XGBoost tidak tersedia, menggunakan GradientBoosting")
+                self.model = GradientBoostingRegressor(n_estimators=200, random_state=42, learning_rate=0.05)
+        elif self.model_type == 'lightgbm':
+            if LIGHTGBM_AVAILABLE:
+                self.model = lgb.LGBMRegressor(n_estimators=300, random_state=42, n_jobs=-1, learning_rate=0.05,
+                                                num_leaves=63, subsample=0.8, colsample_bytree=0.8, verbose=-1)
+            else:
+                logger.warning("LightGBM tidak tersedia, menggunakan GradientBoosting")
+                self.model = GradientBoostingRegressor(n_estimators=200, random_state=42, learning_rate=0.05)
+        elif self.model_type == 'ensemble':
+            estimators = [
+                ('rf', RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1)),
+                ('gb', GradientBoostingRegressor(n_estimators=200, random_state=42, learning_rate=0.05)),
+                ('et', ExtraTreesRegressor(n_estimators=200, random_state=42, n_jobs=-1))
+            ]
+            if XGBOOST_AVAILABLE:
+                estimators.append(('xgb', xgb.XGBRegressor(n_estimators=200, random_state=42, n_jobs=-1,
+                                                              learning_rate=0.05, tree_method='hist')))
+            self.model = VotingRegressor(estimators=estimators, n_jobs=-1)
+        elif self.model_type == 'stacking':
+            estimators = [
+                ('rf', RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)),
+                ('gb', GradientBoostingRegressor(n_estimators=100, random_state=42, learning_rate=0.1)),
+                ('et', ExtraTreesRegressor(n_estimators=100, random_state=42, n_jobs=-1))
+            ]
+            if XGBOOST_AVAILABLE:
+                estimators.append(('xgb', xgb.XGBRegressor(n_estimators=100, random_state=42, n_jobs=-1, tree_method='hist')))
+            self.model = StackingRegressor(estimators=estimators, final_estimator=Ridge(alpha=1.0), n_jobs=-1, cv=3)
+        else:
+            raise ValueError(f"Model type tidak dikenal: {self.model_type}. Pilihan: {self.AVAILABLE_MODELS}")
+
+        if do_tuning and self.model_type in ['random_forest', 'xgboost']:
+            self._hyperparameter_tuning(X_train_scaled, y_train)
+
+        self.model.fit(X_train_scaled, y_train)
+
+        y_pred_train = self.model.predict(X_train_scaled)
+        y_pred_test  = self.model.predict(X_test_scaled)
+
+        self.metrics = {
+            'train_mae':  mean_absolute_error(y_train, y_pred_train),
+            'train_rmse': float(np.sqrt(mean_squared_error(y_train, y_pred_train))),
+            'train_r2':   r2_score(y_train, y_pred_train),
+            'train_mape': float(mean_absolute_percentage_error(y_train, y_pred_train) * 100),
+            'test_mae':   mean_absolute_error(y_test, y_pred_test),
+            'test_rmse':  float(np.sqrt(mean_squared_error(y_test, y_pred_test))),
+            'test_r2':    r2_score(y_test, y_pred_test),
+            'test_mape':  float(mean_absolute_percentage_error(y_test, y_pred_test) * 100),
+        }
+
+        self.is_fitted = True
+        logger.info(f"Training completed. Test RMSE: {self.metrics['test_rmse']:.2f}, R2: {self.metrics['test_r2']:.4f}")
+        return self.metrics
+
     def forecast_future(self, df: pd.DataFrame, periods: int = 30) -> pd.DataFrame:
         """
-        Forecast untuk periode mendatang
-        
-        Parameters:
-        -----------
-        df : pd.DataFrame
-            DataFrame historis
-        periods : int
-            Jumlah periode yang akan diforecast
-            
-        Returns:
-        --------
-        pd.DataFrame
-            DataFrame dengan forecast
+        Autoregressive forecast: setiap hari diprediksi satu per satu,
+        hasilnya langsung dipakai sebagai lag untuk hari berikutnya.
+        Ini menghasilkan forecast yang mengikuti momentum & trend historis,
+        bukan flat di nilai median seperti sebelumnya.
         """
         if self.model_type == 'prophet' and PROPHET_AVAILABLE:
             future = self.model.make_future_dataframe(periods=periods)
             forecast = self.model.predict(future)
             return forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(periods)
-        
-        # Untuk model lain, generate future features
-        last_date = df['date'].max()
-        future_dates = pd.date_range(start=last_date + timedelta(days=1), periods=periods, freq='D')
-        
-        # Create future dataframe dengan features rata-rata
-        future_df = pd.DataFrame({'date': future_dates})
-        
-        # Add time features
-        future_df['year'] = future_df['date'].dt.year
-        future_df['month'] = future_df['date'].dt.month
-        future_df['quarter'] = future_df['date'].dt.quarter
-        future_df['day_of_week'] = future_df['date'].dt.dayofweek
-        future_df['day_of_month'] = future_df['date'].dt.day
-        future_df['week_of_year'] = future_df['date'].dt.isocalendar().week
-        future_df['is_weekend'] = future_df['day_of_week'].isin([5, 6]).astype(int)
-        
-        # BUG FIX: isi feature columns dengan nilai yang sesuai tipenya
-        # - numerik  → median (representatif)
-        # - string/kategorikal → mode (nilai terbanyak), lalu label-encode
-        for col in self.feature_columns:
-            if col not in future_df.columns:
-                if col not in df.columns:
-                    future_df[col] = 0
-                    continue
-                
-                col_dtype = df[col].dtype
-                if pd.api.types.is_numeric_dtype(col_dtype):
-                    future_df[col] = df[col].median()
-                else:
-                    # Kategorikal: pakai mode, lalu encode sama seperti training
-                    mode_val = df[col].mode()
-                    mode_str = str(mode_val.iloc[0]) if not mode_val.empty else 'Unknown'
-                    if col in self.label_encoders:
-                        le = self.label_encoders[col]
-                        # Kalau mode_str ada di classes, encode; kalau tidak, pakai 0
-                        if mode_str in le.classes_:
-                            future_df[col] = le.transform([mode_str])[0]
-                        else:
-                            future_df[col] = 0
-                    else:
-                        future_df[col] = 0
-        
-        # Predict
-        predictions = self.predict(future_df)
-        future_df['forecast'] = predictions
-        
-        return future_df[['date', 'forecast']]
+
+        # Ambil daily series historis sebagai "memori" awal
+        if hasattr(self, '_daily_series') and self._daily_series is not None:
+            history = self._daily_series[['date', 'revenue']].copy()
+        else:
+            # Fallback: build dari df
+            history = self._build_daily_series(df)[['date', 'revenue']].copy()
+
+        history['date'] = pd.to_datetime(history['date'])
+        history = history.sort_values('date').reset_index(drop=True)
+
+        last_date    = history['date'].max()
+        revenue_vals = history['revenue'].tolist()
+        dates_vals   = history['date'].tolist()
+
+        forecast_results = []
+
+        for i in range(periods):
+            next_date = last_date + timedelta(days=i + 1)
+            n = len(revenue_vals)
+
+            # Lag features dari nilai yang sudah diketahui / diprediksi sebelumnya
+            lag_1  = revenue_vals[-1]  if n >= 1  else 0
+            lag_7  = revenue_vals[-7]  if n >= 7  else np.mean(revenue_vals)
+            lag_14 = revenue_vals[-14] if n >= 14 else np.mean(revenue_vals)
+            lag_30 = revenue_vals[-30] if n >= 30 else np.mean(revenue_vals)
+
+            window_7  = revenue_vals[-7:]  if n >= 7  else revenue_vals
+            window_14 = revenue_vals[-14:] if n >= 14 else revenue_vals
+            window_30 = revenue_vals[-30:] if n >= 30 else revenue_vals
+
+            rolling_7    = np.mean(window_7)
+            rolling_14   = np.mean(window_14)
+            rolling_30   = np.mean(window_30)
+            rolling_std7 = float(np.std(window_7)) if len(window_7) > 1 else 0.0
+
+            # Trend: slope linear dari 7 hari terakhir
+            if len(window_7) >= 2:
+                trend_7 = float(np.polyfit(range(len(window_7)), window_7, 1)[0])
+            else:
+                trend_7 = 0.0
+
+            row = {
+                'year':         next_date.year,
+                'month':        next_date.month,
+                'quarter':      (next_date.month - 1) // 3 + 1,
+                'day_of_week':  next_date.dayofweek,
+                'day_of_month': next_date.day,
+                'week_of_year': int(next_date.isocalendar()[1]),
+                'is_weekend':   int(next_date.dayofweek in [5, 6]),
+                'lag_1':        lag_1,
+                'lag_7':        lag_7,
+                'lag_14':       lag_14,
+                'lag_30':       lag_30,
+                'rolling_7':    rolling_7,
+                'rolling_14':   rolling_14,
+                'rolling_30':   rolling_30,
+                'rolling_std7': rolling_std7,
+                'trend_7':      trend_7,
+            }
+
+            X_row = pd.DataFrame([row])[self.feature_columns].fillna(0)
+            X_scaled_arr = self.scaler.transform(X_row)
+            X_scaled = pd.DataFrame(X_scaled_arr, columns=self.feature_columns)
+            pred = float(self.model.predict(X_scaled)[0])
+            pred = max(pred, 0)  # revenue tidak boleh negatif
+
+            forecast_results.append({'date': next_date, 'forecast': pred})
+            revenue_vals.append(pred)  # pakai prediksi sebagai lag untuk iterasi berikutnya
+
+        return pd.DataFrame(forecast_results)
     
     def get_feature_importance(self) -> pd.DataFrame:
         """
