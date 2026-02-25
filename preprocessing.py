@@ -573,15 +573,15 @@ class DataPreprocessor:
         
         return df
     
-    # ── STATUS VALUES YANG DIANGGAP "SUKSES / COMPLETED" ─────────────────────────
+    # ── STATUS SUCCESS VALUES ─────────────────────────────────────────────────
     # Hanya baris dengan status ini yang dihitung sebagai revenue.
-    # Baris cancel, return, failed → revenue di-set 0 (transaksi tetap ada untuk chart status).
+    # Baris cancel/return/failed → revenue di-nol, tapi tetap ada di DataFrame
+    # supaya chart distribusi status tetap akurat.
     STATUS_SUCCESS_VALUES = {
         'selesai', 'completed', 'complete', 'sukses', 'success',
         'berhasil', 'lunas', 'paid', 'delivered', 'terkirim',
         'diterima', 'confirmed', 'terkonfirmasi', 'approved', 'disetujui',
         'finish', 'done', 'selesai_kirim',
-        # marketplace-specific
         'pesanan_selesai', 'order_selesai', 'transaksi_selesai',
         'order_completed', 'order_done',
     }
@@ -590,13 +590,9 @@ class DataPreprocessor:
         """
         Jika ada kolom 'status', set revenue = 0 untuk baris yang bukan sukses/completed.
 
-        Tujuan:
-        - Baris cancelled/return/failed tetap EXIST di DataFrame
-          → chart status transaksi tetap akurat (jumlah tiap status tampil benar)
-        - Tapi revenue-nya di-nol-kan agar KPI, trend, top produk, dll
-          hanya menghitung transaksi yang benar-benar berhasil.
-
-        Returns DataFrame dengan kolom 'is_successful_transaction' (bool).
+        - Baris cancel/return TETAP ADA → chart distribusi status akurat
+        - Revenue di-nol-kan → KPI, trend, top produk hanya hitung transaksi berhasil
+        - Kolom 'is_successful_transaction' (bool) ditambahkan sebagai marker
         """
         df = df.copy()
 
@@ -605,15 +601,14 @@ class DataPreprocessor:
             return df
 
         status_norm = df['status'].astype(str).str.lower().str.strip()
-        is_success = status_norm.isin(self.STATUS_SUCCESS_VALUES)
+        is_success  = status_norm.isin(self.STATUS_SUCCESS_VALUES)
 
-        # Heuristic tambahan: jika tidak ada satu pun match, mungkin nilai uniknya
-        # tidak ada dalam daftar → jangan zero-out semua (fallback: anggap semua sukses)
+        # Fallback: jika tidak ada satu pun yang match, anggap semua valid
         if is_success.sum() == 0:
             logger.warning(
-                "apply_status_revenue_filter: tidak ada nilai status yang cocok dengan "
-                f"STATUS_SUCCESS_VALUES. Nilai unik: {status_norm.unique()[:10].tolist()}. "
-                "Revenue tidak di-filter (semua dianggap valid)."
+                f"apply_status_revenue_filter: tidak ada nilai status yang cocok. "
+                f"Nilai unik: {status_norm.unique()[:10].tolist()}. "
+                "Revenue tidak difilter (semua dianggap valid)."
             )
             df['is_successful_transaction'] = True
             return df
@@ -701,11 +696,16 @@ class DataPreprocessor:
             # Price tier
             price_q25 = df['price'].quantile(0.25)
             price_q75 = df['price'].quantile(0.75)
-            df['price_tier'] = pd.cut(
-                df['price'],
-                bins=[0, price_q25, price_q75, float('inf')],
-                labels=['Low', 'Medium', 'High']
-            )
+            # BUG FIX: pd.cut gagal kalau q25 == q75 (semua harga sama) → pakai duplicates='drop'
+            try:
+                df['price_tier'] = pd.cut(
+                    df['price'],
+                    bins=[0, price_q25, price_q75, float('inf')],
+                    labels=['Low', 'Medium', 'High'],
+                    duplicates='drop'
+                )
+            except Exception:
+                df['price_tier'] = 'Medium'
         
         # Product performance features
         if 'product' in df.columns:
@@ -762,9 +762,9 @@ class DataPreprocessor:
         # 5. Kalkulasi revenue
         df = self.calculate_revenue(df)
         
-        # 5b. BUG FIX: Jika ada kolom 'status', zero-out revenue baris non-sukses.
-        #     Baris cancel/return/failed tetap ada (untuk chart status distribusi),
-        #     tapi revenue-nya di-nol agar KPI & trend hanya hitung transaksi berhasil.
+        # 5b. BUG FIX: jika ada kolom 'status', zero-out revenue baris non-sukses.
+        #     Baris cancel/return tetap ada untuk chart status, tapi revenue-nya 0
+        #     sehingga KPI & trend hanya hitung transaksi berhasil.
         df = self.apply_status_revenue_filter(df)
         
         # 6. Feature engineering
