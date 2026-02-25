@@ -1226,8 +1226,15 @@ def tab_forecast():
             st.markdown('<div class="glass-card"><p class="card-title">📈 Forecast vs Historical</p>', unsafe_allow_html=True)
             if 'date' in df.columns:
                 daily = df.groupby(df['date'].dt.date)['revenue'].sum().reset_index()
+                # BUG FIX: potong historis sesuai jumlah periods yang dipilih user
+                # supaya chart tidak menampilkan semua data dari tahun-tahun sebelumnya.
+                # Historis ditampilkan sejumlah run_periods hari ke belakang dari tanggal terakhir,
+                # sehingga chart simetris: N hari historis + N hari forecast.
+                n_periods = len(fc_df) if fc_df is not None else periods
+                cutoff = daily['date'].max() - pd.Timedelta(days=n_periods)
+                daily_trimmed = daily[daily['date'] > cutoff]
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(x=daily['date'], y=daily['revenue'], fill='tozeroy', mode='lines', name='Historis',
+                fig.add_trace(go.Scatter(x=daily_trimmed['date'], y=daily_trimmed['revenue'], fill='tozeroy', mode='lines', name='Historis',
                                          line=dict(color='#06b6d4', width=2), fillcolor='rgba(6,182,212,0.1)'))
                 if 'forecast' in fc_df.columns:
                     fig.add_trace(go.Scatter(x=fc_df['date'], y=fc_df['forecast'], mode='lines', name='Forecast',
