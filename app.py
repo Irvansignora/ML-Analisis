@@ -478,7 +478,105 @@ def tab_sales():
     st.markdown('<div class="hero-header"><p class="hero-title">📊 Sales Performance</p><p class="hero-sub">Top & bottom produk, salesperson, channel</p></div>', unsafe_allow_html=True)
     df = get_df()
     if df is None: return empty("📊","Belum ada data")
-    if 'revenue' not in df.columns: return empty("⚠️","Kolom revenue tidak ditemukan")
+
+    # ── STATUS TRANSAKSI — ditampilkan DULU, tidak perlu kolom revenue ────────
+    # BUG FIX: sebelumnya chart status di-skip kalau revenue tidak ada (early return).
+    # Sekarang status chart dirender lebih awal, independent dari keberadaan revenue.
+    if 'status' in df.columns:
+        section("🔖 Status Transaksi")
+
+        STATUS_COLORS = {
+            'selesai':      '#10b981', 'completed':    '#10b981',
+            'complete':     '#10b981', 'sukses':       '#10b981', 'success':      '#10b981',
+            'dikirim':      '#06b6d4', 'shipped':      '#06b6d4',
+            'diproses':     '#f59e0b', 'processing':   '#f59e0b',
+            'pending':      '#f59e0b', 'menunggu':     '#f59e0b',
+            'cancel':       '#ef4444', 'cancelled':    '#ef4444', 'dibatalkan':   '#ef4444',
+            'return':       '#8b5cf6', 'returned':     '#8b5cf6',
+            'dikembalikan': '#8b5cf6', 'refund':       '#8b5cf6',
+            'gagal':        '#ef4444', 'failed':       '#ef4444',
+        }
+
+        # Jika ada revenue, groupby dengan revenue — kalau tidak ada, cukup count transaksi
+        if 'revenue' in df.columns:
+            st_grp = df.groupby('status').agg(
+                jumlah_transaksi=('revenue', 'count'),
+                total_revenue=('revenue', 'sum')
+            ).reset_index().sort_values('jumlah_transaksi', ascending=False)
+        else:
+            st_grp = df.groupby('status').size().reset_index(name='jumlah_transaksi')
+            st_grp['total_revenue'] = 0
+            st_grp = st_grp.sort_values('jumlah_transaksi', ascending=False)
+
+        def get_status_color(s):
+            return STATUS_COLORS.get(str(s).lower().strip(), '#64748b')
+
+        colors_pie = [get_status_color(s) for s in st_grp['status']]
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown('<div class="glass-card"><p class="card-title">🥧 Distribusi Transaksi per Status</p>', unsafe_allow_html=True)
+            fig = go.Figure(go.Pie(
+                labels=st_grp['status'], values=st_grp['jumlah_transaksi'],
+                hole=0.55, marker=dict(colors=colors_pie),
+                textinfo='label+percent', textfont=dict(size=11)
+            ))
+            fig.update_layout(showlegend=False, margin=dict(t=10,b=10,l=10,r=10))
+            ct(fig); st.plotly_chart(fig, width='stretch')
+            st.markdown('</div>', unsafe_allow_html=True)
+        with c2:
+            st.markdown('<div class="glass-card"><p class="card-title">📊 Jumlah Transaksi per Status</p>', unsafe_allow_html=True)
+            fig = go.Figure(go.Bar(
+                x=st_grp['jumlah_transaksi'], y=st_grp['status'], orientation='h',
+                marker=dict(color=colors_pie),
+                text=st_grp['jumlah_transaksi'], textposition='outside',
+                textfont=dict(color='#e0f2fe')
+            ))
+            fig.update_layout(yaxis=dict(autorange='reversed'), xaxis_title='Jumlah Transaksi')
+            ct(fig); st.plotly_chart(fig, width='stretch')
+            st.markdown('</div>', unsafe_allow_html=True)
+        with c3:
+            st.markdown('<div class="glass-card"><p class="card-title">💰 Revenue per Status</p>', unsafe_allow_html=True)
+            if 'revenue' in df.columns:
+                fig = go.Figure(go.Bar(
+                    x=st_grp['total_revenue'], y=st_grp['status'], orientation='h',
+                    marker=dict(color=colors_pie),
+                    text=st_grp['total_revenue'].apply(format_currency),
+                    textposition='outside', textfont=dict(color='#e0f2fe', size=9)
+                ))
+                fig.update_layout(yaxis=dict(autorange='reversed'), xaxis_title='Revenue')
+                ct(fig); st.plotly_chart(fig, width='stretch')
+            else:
+                st.info("ℹ️ Kolom revenue tidak ditemukan — chart revenue per status tidak tersedia.")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # Tabel ringkas
+        st.markdown('<div class="glass-card"><p class="card-title">📋 Ringkasan Status</p>', unsafe_allow_html=True)
+        tbl = st_grp.copy()
+        tbl['pct_transaksi'] = (tbl['jumlah_transaksi'] / tbl['jumlah_transaksi'].sum() * 100).round(1).astype(str) + '%'
+        if 'revenue' in df.columns:
+            tbl['total_revenue_fmt'] = tbl['total_revenue'].apply(format_currency)
+            tbl['avg_revenue']       = (tbl['total_revenue'] / tbl['jumlah_transaksi']).apply(format_currency)
+            st.dataframe(
+                tbl[['status','jumlah_transaksi','pct_transaksi','total_revenue_fmt','avg_revenue']]
+                .rename(columns={'status':'Status','jumlah_transaksi':'Jumlah Transaksi',
+                                 'pct_transaksi':'% Transaksi','total_revenue_fmt':'Total Revenue',
+                                 'avg_revenue':'Avg Revenue/Transaksi'}),
+                use_container_width=True, hide_index=True
+            )
+        else:
+            st.dataframe(
+                tbl[['status','jumlah_transaksi','pct_transaksi']]
+                .rename(columns={'status':'Status','jumlah_transaksi':'Jumlah Transaksi',
+                                 'pct_transaksi':'% Transaksi'}),
+                use_container_width=True, hide_index=True
+            )
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── Mulai section yang butuh revenue ──────────────────────────────────────
+    if 'revenue' not in df.columns:
+        st.info("ℹ️ Kolom revenue tidak ditemukan — analisis produk & salesperson tidak tersedia.")
+        return
 
     section("🔝 Top & Bottom Produk")
 
@@ -573,110 +671,6 @@ def tab_sales():
                 st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info("ℹ️ Kolom salesperson/channel tidak ditemukan di dataset")
-
-    # ── STATUS TRANSAKSI ──────────────────────────────────────────────────────
-    if 'status' in df.columns:
-        section("🔖 Status Transaksi")
-
-        # Warna per status
-        STATUS_COLORS = {
-            'selesai':      '#10b981',
-            'completed':    '#10b981',
-            'complete':     '#10b981',
-            'sukses':       '#10b981',
-            'success':      '#10b981',
-            'dikirim':      '#06b6d4',
-            'shipped':      '#06b6d4',
-            'diproses':     '#f59e0b',
-            'processing':   '#f59e0b',
-            'pending':      '#f59e0b',
-            'menunggu':     '#f59e0b',
-            'cancel':       '#ef4444',
-            'cancelled':    '#ef4444',
-            'dibatalkan':   '#ef4444',
-            'return':       '#8b5cf6',
-            'returned':     '#8b5cf6',
-            'dikembalikan': '#8b5cf6',
-            'refund':       '#8b5cf6',
-            'gagal':        '#ef4444',
-            'failed':       '#ef4444',
-        }
-
-        st_grp = df.groupby('status').agg(
-            jumlah_transaksi=('revenue', 'count'),
-            total_revenue=('revenue', 'sum')
-        ).reset_index().sort_values('jumlah_transaksi', ascending=False)
-
-        # Assign warna per status
-        def get_status_color(s):
-            return STATUS_COLORS.get(str(s).lower().strip(), '#64748b')
-
-        colors_pie = [get_status_color(s) for s in st_grp['status']]
-
-        c1, c2, c3 = st.columns(3)
-
-        with c1:
-            st.markdown('<div class="glass-card"><p class="card-title">🥧 Distribusi Transaksi per Status</p>', unsafe_allow_html=True)
-            fig = go.Figure(go.Pie(
-                labels=st_grp['status'],
-                values=st_grp['jumlah_transaksi'],
-                hole=0.55,
-                marker=dict(colors=colors_pie),
-                textinfo='label+percent',
-                textfont=dict(size=11)
-            ))
-            fig.update_layout(showlegend=False, margin=dict(t=10,b=10,l=10,r=10))
-            ct(fig); st.plotly_chart(fig, width='stretch')
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        with c2:
-            st.markdown('<div class="glass-card"><p class="card-title">📊 Jumlah Transaksi per Status</p>', unsafe_allow_html=True)
-            fig = go.Figure(go.Bar(
-                x=st_grp['jumlah_transaksi'],
-                y=st_grp['status'],
-                orientation='h',
-                marker=dict(color=colors_pie),
-                text=st_grp['jumlah_transaksi'],
-                textposition='outside',
-                textfont=dict(color='#e0f2fe')
-            ))
-            fig.update_layout(yaxis=dict(autorange='reversed'), xaxis_title='Jumlah Transaksi')
-            ct(fig); st.plotly_chart(fig, width='stretch')
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        with c3:
-            st.markdown('<div class="glass-card"><p class="card-title">💰 Revenue per Status</p>', unsafe_allow_html=True)
-            fig = go.Figure(go.Bar(
-                x=st_grp['total_revenue'],
-                y=st_grp['status'],
-                orientation='h',
-                marker=dict(color=colors_pie),
-                text=st_grp['total_revenue'].apply(format_currency),
-                textposition='outside',
-                textfont=dict(color='#e0f2fe', size=9)
-            ))
-            fig.update_layout(yaxis=dict(autorange='reversed'), xaxis_title='Revenue')
-            ct(fig); st.plotly_chart(fig, width='stretch')
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        # Tabel ringkas
-        st.markdown('<div class="glass-card"><p class="card-title">📋 Ringkasan Status</p>', unsafe_allow_html=True)
-        tbl = st_grp.copy()
-        tbl['total_revenue_fmt'] = tbl['total_revenue'].apply(format_currency)
-        tbl['pct_transaksi']     = (tbl['jumlah_transaksi'] / tbl['jumlah_transaksi'].sum() * 100).round(1).astype(str) + '%'
-        tbl['avg_revenue']       = (tbl['total_revenue'] / tbl['jumlah_transaksi']).apply(format_currency)
-        st.dataframe(
-            tbl[['status','jumlah_transaksi','pct_transaksi','total_revenue_fmt','avg_revenue']]
-            .rename(columns={
-                'status':             'Status',
-                'jumlah_transaksi':   'Jumlah Transaksi',
-                'pct_transaksi':      '% Transaksi',
-                'total_revenue_fmt':  'Total Revenue',
-                'avg_revenue':        'Avg Revenue/Transaksi',
-            }),
-            use_container_width=True, hide_index=True
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
 
 # ── TAB 3: PROFITABILITY ──────────────────────────────────────────────────────
 def tab_profit():
