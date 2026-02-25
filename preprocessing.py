@@ -329,6 +329,49 @@ class DataPreprocessor:
         df = df.rename(columns=new_columns)
         logger.info(f"Columns standardized: {new_columns}")
 
+        # ── POST-VALIDATION: pastikan kolom 'product' tidak berisi data status ──
+        # BUG FIX: file Excel dengan header 'status' bisa nyasar ke kolom product
+        # lewat partial-match fallback. Deteksi & bersihkan di sini.
+        _STATUS_LIKE_VALUES = {
+            'selesai', 'completed', 'complete', 'sukses', 'success',
+            'dikirim', 'shipped', 'diproses', 'processing', 'pending',
+            'menunggu', 'cancel', 'cancelled', 'dibatalkan',
+            'return', 'returned', 'dikembalikan', 'refund',
+            'gagal', 'failed', 'lunas', 'unpaid', 'paid',
+        }
+        if 'product' in df.columns:
+            sample_vals = set(
+                df['product'].dropna().astype(str).str.lower().str.strip().unique()[:30]
+            )
+            overlap = sample_vals & _STATUS_LIKE_VALUES
+            # Jika >40% nilai unik di kolom 'product' adalah nilai status → kolom salah mapping
+            if len(sample_vals) > 0 and len(overlap) / len(sample_vals) > 0.4:
+                logger.warning(
+                    f"BUG FIX: Kolom 'product' terdeteksi berisi data status ({overlap}). "
+                    f"Mapping dibatalkan — kolom akan di-drop dan diisi fallback."
+                )
+                df = df.drop(columns=['product'])
+                # Hapus juga dari mapped_columns agar tidak menyesatkan downstream
+                if 'product' in self.mapped_columns:
+                    del self.mapped_columns['product']
+                if 'product' in mapped_std:
+                    mapped_std.discard('product')
+
+        # ── POST-VALIDATION: pastikan kolom 'category' tidak berisi data status ──
+        if 'category' in df.columns:
+            sample_cat = set(
+                df['category'].dropna().astype(str).str.lower().str.strip().unique()[:30]
+            )
+            overlap_cat = sample_cat & _STATUS_LIKE_VALUES
+            if len(sample_cat) > 0 and len(overlap_cat) / len(sample_cat) > 0.4:
+                logger.warning(
+                    f"BUG FIX: Kolom 'category' terdeteksi berisi data status ({overlap_cat}). "
+                    f"Mapping dibatalkan."
+                )
+                df = df.drop(columns=['category'])
+                if 'category' in self.mapped_columns:
+                    del self.mapped_columns['category']
+
         # ── FALLBACK: pastikan kolom wajib ada ───────────────────────────────
         # product fallback — status & courier TIDAK boleh jadi proxy product
         if 'product' not in df.columns:
