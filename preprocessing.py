@@ -294,7 +294,17 @@ class DataPreprocessor:
         # ── PASS 2: PARTIAL / SUBSTRING MATCH ───────────────────────────────
         # Hanya untuk kolom & standard_name yang belum terpetakan
         blacklist = {b.lower() for b in self._PRODUCT_PARTIAL_BLACKLIST}
-        
+
+        # BUG FIX: kolom-kolom ini TIDAK BOLEH di-remap ke standard name lain
+        # meski belum terpetakan di PASS 1 (misalnya jika tidak ada exact match).
+        # Ini mencegah kolom 'status' nyasar ke 'product' lewat partial match.
+        _HARD_RESERVED_COLS = {
+            'status', 'status_order', 'status_transaksi', 'status_pembayaran',
+            'order_status', 'transaction_status', 'payment_status',
+            'kondisi', 'kurir', 'courier', 'ekspedisi',
+            'diskon', 'discount', 'ongkir', 'shipping', 'pajak', 'tax',
+        }
+
         for standard_name, variations in self.COLUMN_MAPPINGS.items():
             if standard_name in mapped_std:
                 continue
@@ -302,7 +312,12 @@ class DataPreprocessor:
             for col in all_cols:
                 if col in new_columns:
                     continue
-                
+
+                # BUG FIX: jika kolom ini ada di hard-reserved list, skip total —
+                # jangan biarkan diremapping ke standard name apapun via partial match
+                if col in _HARD_RESERVED_COLS:
+                    continue
+
                 # Untuk 'product': tolak kolom yang mengandung kata dari blacklist
                 if standard_name == 'product':
                     col_words = set(col.split('_'))
@@ -315,7 +330,7 @@ class DataPreprocessor:
                     cust_bl = {b.lower() for b in self._CUSTOMER_PARTIAL_BLACKLIST}
                     if col_words & cust_bl:
                         continue  # skip - kolom ini bukan customer
-                
+
                 # Cek substring match (var ada di dalam col, atau col ada di dalam var)
                 for var in var_set:
                     if len(var) >= 3 and (var in col or col in var):
@@ -330,8 +345,7 @@ class DataPreprocessor:
         logger.info(f"Columns standardized: {new_columns}")
 
         # ── POST-VALIDATION: pastikan kolom 'product' tidak berisi data status ──
-        # BUG FIX: file Excel dengan header 'status' bisa nyasar ke kolom product
-        # lewat partial-match fallback. Deteksi & bersihkan di sini.
+        # Double-check: meskipun PASS 1 & 2 sudah diperketat, ini safety net terakhir.
         _STATUS_LIKE_VALUES = {
             'selesai', 'completed', 'complete', 'sukses', 'success',
             'dikirim', 'shipped', 'diproses', 'processing', 'pending',
@@ -351,7 +365,6 @@ class DataPreprocessor:
                     f"Mapping dibatalkan — kolom akan di-drop dan diisi fallback."
                 )
                 df = df.drop(columns=['product'])
-                # Hapus juga dari mapped_columns agar tidak menyesatkan downstream
                 if 'product' in self.mapped_columns:
                     del self.mapped_columns['product']
                 if 'product' in mapped_std:
@@ -373,27 +386,43 @@ class DataPreprocessor:
                     del self.mapped_columns['category']
 
         # ── FALLBACK: pastikan kolom wajib ada ───────────────────────────────
-        # product fallback — status & courier TIDAK boleh jadi proxy product
+        # BUG FIX: fallback product WAJIB cek isi kolom — tidak boleh pakai
+        # kolom yang isinya status/nilai transaksi.
+        def _col_has_status_values(series) -> bool:
+            """Kembalikan True jika kolom ini isinya nilai-nilai status transaksi."""
+            sample = set(series.dropna().astype(str).str.lower().str.strip().unique()[:20])
+            if len(sample) == 0:
+                return False
+            return len(sample & _STATUS_LIKE_VALUES) / len(sample) > 0.4
+
         if 'product' not in df.columns:
+            placed = False
             for fallback in ['category', 'channel']:
                 if fallback in df.columns:
                     col_dtype = df[fallback].dtype
-                    if col_dtype == object or str(col_dtype) == 'string':
+                    if (col_dtype == object or str(col_dtype) == 'string') \
+                            and not _col_has_status_values(df[fallback]):
                         df['product'] = df[fallback].astype(str)
                         logger.info(f"product proxy: '{fallback}'")
+                        placed = True
                         break
-            else:
-                df['product'] = 'Unknown'
-                logger.warning("Kolom 'product' tidak ditemukan, diisi 'Unknown'")
+            if not placed:
+                # Tidak ada kolom yang layak jadi proxy product
+                # Jangan paksa — biarkan chart produk tidak muncul daripada salah data
+                logger.warning("Kolom 'product' tidak ditemukan dan tidak ada fallback yang valid. "
+                               "Chart produk tidak akan ditampilkan.")
+                # TIDAK di-set ke 'Unknown' agar _is_product_col_valid di app.py return False
 
         # category fallback — status TIDAK boleh jadi proxy category
         if 'category' not in df.columns:
+            placed_cat = False
             for fallback in ['channel', 'courier']:
-                if fallback in df.columns:
+                if fallback in df.columns and not _col_has_status_values(df[fallback]):
                     df['category'] = df[fallback].astype(str)
                     logger.info(f"category proxy: '{fallback}'")
+                    placed_cat = True
                     break
-            else:
+            if not placed_cat:
                 df['category'] = 'General'
                 logger.warning("Kolom 'category' tidak ditemukan, diisi 'General'")
 
