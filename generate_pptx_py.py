@@ -2,7 +2,7 @@
 generate_pptx_py.py
 ===================
 Pure-Python replacement for generate_pptx.js
-Generates a 9-slide Sales ML Analytics PowerPoint with Ocean Dark theme.
+Generates a 12-slide Sales ML Analytics PowerPoint with Ocean Dark theme.
 Requires: python-pptx   (pip install python-pptx)
 
 Usage (called directly from utils.py):
@@ -872,7 +872,7 @@ def slide_branch(prs, data: dict):
     if not branches:
         add_text_box(slide, "Data branch tidak tersedia",
                      3.5, 2.5, 3, 0.4, font_size=12, color_hex=P['muted'], align=PP_ALIGN.CENTER)
-        add_footer(slide, prs, 10, TOTAL)
+        add_footer(slide, prs, 9, TOTAL)
         return
 
     top_branches = sorted(branches, key=lambda b: safe(b.get('revenue', 0)), reverse=True)[:8]
@@ -935,10 +935,10 @@ def slide_branch(prs, data: dict):
 
     _ranking_table(slide, prs, enriched, 5.3, 2.38, 4.4, 2.9, col_defs, row_limit=8)
 
-    add_footer(slide, prs, 10, TOTAL)
+    add_footer(slide, prs, 9, TOTAL)
 
 
-# ── SLIDE 11 · CHANNEL ANALYSIS ───────────────────────────────────────────────
+# ── SLIDE 10 · CHANNEL ANALYSIS ───────────────────────────────────────────────
 def slide_channel(prs, data: dict):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     add_base(slide, prs)
@@ -951,7 +951,7 @@ def slide_channel(prs, data: dict):
     if not channels:
         add_text_box(slide, "Data channel tidak tersedia",
                      3.5, 2.5, 3, 0.4, font_size=12, color_hex=P['muted'], align=PP_ALIGN.CENTER)
-        add_footer(slide, prs, 11, TOTAL)
+        add_footer(slide, prs, 10, TOTAL)
         return
 
     channels_sorted = sorted(channels, key=lambda c: safe(c.get('revenue', 0)), reverse=True)
@@ -1021,10 +1021,10 @@ def slide_channel(prs, data: dict):
 
     _ranking_table(slide, prs, enriched, 5.15, 2.38, 4.55, 2.9, col_defs, row_limit=8)
 
-    add_footer(slide, prs, 11, TOTAL)
+    add_footer(slide, prs, 10, TOTAL)
 
 
-# ── SLIDE 12 · SALES PERSON ───────────────────────────────────────────────────
+# ── SLIDE 11 · SALES PERSON ───────────────────────────────────────────────────
 def slide_salesperson(prs, data: dict):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     add_base(slide, prs)
@@ -1037,7 +1037,7 @@ def slide_salesperson(prs, data: dict):
     if not salespeople:
         add_text_box(slide, "Data sales person tidak tersedia",
                      3.5, 2.5, 3, 0.4, font_size=12, color_hex=P['muted'], align=PP_ALIGN.CENTER)
-        add_footer(slide, prs, 12, TOTAL)
+        add_footer(slide, prs, 11, TOTAL)
         return
 
     sp_sorted = sorted(salespeople, key=lambda s: safe(s.get('revenue', 0)), reverse=True)
@@ -1103,10 +1103,10 @@ def slide_salesperson(prs, data: dict):
 
     _ranking_table(slide, prs, enriched, 5.3, 2.38, 4.4, 2.9, col_defs, row_limit=8)
 
-    add_footer(slide, prs, 12, TOTAL)
+    add_footer(slide, prs, 11, TOTAL)
 
 
-
+# ── SLIDE 12 · CLOSING ────────────────────────────────────────────────────────
 def slide_closing(prs, data: dict):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     set_slide_bg(slide, prs, P['bg'])
