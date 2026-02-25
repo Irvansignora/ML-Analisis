@@ -410,6 +410,21 @@ def tab_kpi():
     df = get_df()
     if df is None: return empty("📂","Belum ada data","Upload file atau load sample data")
 
+    # BUG FIX: Jika ada kolom status, tampilkan info dan pastikan revenue sudah difilter
+    # (filtering dilakukan di preprocessing.apply_status_revenue_filter — revenue baris non-sukses = 0)
+    if 'status' in df.columns and 'is_successful_transaction' in df.columns:
+        n_success = df['is_successful_transaction'].sum()
+        n_total   = len(df)
+        n_failed  = n_total - n_success
+        pct_ok    = n_success / n_total * 100 if n_total else 0
+        st.info(
+            f"ℹ️ **Status filter aktif** — Revenue dihitung dari **{n_success:,} transaksi sukses** "
+            f"({pct_ok:.1f}%) dari total {n_total:,} transaksi. "
+            f"{n_failed:,} transaksi cancel/return/failed di-exclude dari revenue."
+        )
+    elif 'status' in df.columns:
+        st.warning("⚠️ Kolom status ditemukan tapi belum difilter — coba re-upload data.")
+
     rev = df['revenue'].sum() if 'revenue' in df.columns else 0
     qty = df['quantity'].sum() if 'quantity' in df.columns else 0
     txn = len(df)
