@@ -525,6 +525,15 @@ def tab_sales():
                 fig.update_traces(textposition='top center', textfont=dict(color='#7dd3fc', size=9))
                 ct(fig); st.plotly_chart(fig, width='stretch')
                 st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        # BUG FIX: tampilkan pesan informatif jika kolom product tidak ditemukan
+        # atau kolom product terisi data status (bukan nama produk)
+        if 'product' in df.columns:
+            st.warning("⚠️ Kolom 'produk' terdeteksi berisi data status transaksi (bukan nama produk). "
+                       "Pastikan file Excel kamu memiliki kolom nama produk (contoh: 'nama_produk', 'product', 'item', dll).")
+        else:
+            st.info("ℹ️ Kolom produk tidak ditemukan di dataset ini. "
+                    "Chart produk hanya tersedia jika data memiliki kolom nama produk.")
 
     section("👤 Top Salesperson")
     sales_col = next((c for c in ['salesperson','sales_person','sales','nama_sales','sales_name','agen','agent','pic'] if c in df.columns), None)
