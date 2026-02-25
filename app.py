@@ -392,8 +392,13 @@ def render_sidebar():
                     filtered = filtered[filtered['region'].isin(sel_reg)]
                 if sel_ch and 'channel' in df.columns:
                     filtered = filtered[filtered['channel'].isin(sel_ch)]
-                st.session_state.df_filtered = filtered
-                st.session_state.analyzer    = SalesAnalyzer(filtered)
+                st.session_state.df_filtered      = filtered
+                st.session_state.analyzer         = SalesAnalyzer(filtered)
+                # BUG FIX: reset forecast saat filter berubah supaya chart
+                # tidak menampilkan forecast lama yang dilatih dari data berbeda.
+                st.session_state.forecast_df      = None
+                st.session_state.forecast_metrics = None
+                st.session_state.forecaster       = None
                 st.success(f"Filter diterapkan: {len(filtered):,} records")
 
             if st.button("❌ Reset Filter"):
@@ -1187,8 +1192,16 @@ def tab_forecast():
         st.markdown("---")
 
         if st.button("🚀 Train & Forecast", type="primary"):
-            run_model   = st.session_state.get('saved_model_type', model_type)
-            run_periods = st.session_state.get('saved_forecast_periods', periods)
+            # BUG FIX: Pakai langsung nilai dari UI widget, bukan dari session state.
+            # Sebelumnya pakai saved_model_type/saved_forecast_periods sehingga
+            # model yang dijalankan selalu yang terakhir disimpan, bukan yang dipilih.
+            run_model   = model_type
+            run_periods = periods
+            # Reset state lama dulu supaya chart/feature importance lama
+            # tidak tertampil jika training gagal di tengah jalan.
+            st.session_state.forecast_df      = None
+            st.session_state.forecast_metrics = None
+            st.session_state.forecaster       = None
             with st.spinner(f"Training {run_model}..."):
                 try:
                     fc = SalesForecaster(model_type=run_model)
