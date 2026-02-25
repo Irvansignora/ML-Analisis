@@ -11,6 +11,9 @@ import logging
 from typing import Dict, List, Tuple, Optional, Union, Any
 from pathlib import Path
 import json
+import importlib
+import importlib.util
+import sys
 
 # Visualization imports
 import matplotlib.pyplot as plt
@@ -35,6 +38,25 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+# === BUG FIX: Anti-cache PPTX loader ===
+# Force fresh import setiap kali — bypass Streamlit/Python module cache
+def get_pptx_builder():
+    # Hapus cache total
+    for key in list(sys.modules.keys()):
+        if 'generate_pptx_py' in key:
+            del sys.modules[key]
+
+    # Import fresh
+    spec = importlib.util.spec_from_file_location(
+        "generate_pptx_py",
+        Path(__file__).parent / "generate_pptx_py.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["generate_pptx_py"] = module
+    spec.loader.exec_module(module)
+    return module.build_presentation
 
 # Set style untuk matplotlib
 plt.style.use('seaborn-v0_8-darkgrid')
@@ -61,45 +83,42 @@ class SalesAnalyzer:
     
     def calculate_kpis(self) -> Dict[str, float]:
         """
-        Kalkulasi KPI utama.
-        BUG FIX: jika 'is_successful_transaction' ada (dari preprocessing status filter),
-        revenue/qty dihitung dari baris sukses saja. AOV = revenue / successful_transactions.
+        Kalkulasi KPI utama
+        
+        Returns:
+        --------
+        dict
+            Dictionary berisi KPI
         """
         kpis = {}
-
-        # BUG FIX: gunakan df sukses untuk revenue KPI
-        df_ok = (
-            self.df[self.df['is_successful_transaction'] == True]
-            if 'is_successful_transaction' in self.df.columns
-            else self.df
-        )
-
-        if 'revenue' in df_ok.columns:
-            kpis['total_revenue']  = df_ok['revenue'].sum()
-            kpis['avg_revenue']    = df_ok['revenue'].mean()
-            kpis['median_revenue'] = df_ok['revenue'].median()
-
-        if 'quantity' in df_ok.columns:
-            kpis['total_quantity'] = df_ok['quantity'].sum()
-            kpis['avg_quantity']   = df_ok['quantity'].mean()
-
-        kpis['total_transactions']       = len(self.df)       # semua baris
-        kpis['successful_transactions']  = len(df_ok)         # baris sukses saja
-
-        txn_for_aov = kpis['successful_transactions'] or kpis['total_transactions']
-        if 'revenue' in df_ok.columns and txn_for_aov:
-            kpis['avg_order_value'] = kpis.get('total_revenue', 0) / txn_for_aov
-
+        
+        # Basic KPIs
+        if 'revenue' in self.df.columns:
+            kpis['total_revenue'] = self.df['revenue'].sum()
+            kpis['avg_revenue'] = self.df['revenue'].mean()
+            kpis['median_revenue'] = self.df['revenue'].median()
+        
+        if 'quantity' in self.df.columns:
+            kpis['total_quantity'] = self.df['quantity'].sum()
+            kpis['avg_quantity'] = self.df['quantity'].mean()
+        
+        kpis['total_transactions'] = len(self.df)
+        
+        if 'revenue' in self.df.columns and 'quantity' in self.df.columns:
+            kpis['avg_order_value'] = kpis['total_revenue'] / kpis['total_transactions']
+        
+        # Product metrics
         if 'product' in self.df.columns:
             kpis['unique_products'] = self.df['product'].nunique()
-
+        
         if 'customer' in self.df.columns:
             kpis['unique_customers'] = self.df['customer'].nunique()
-
+        
+        # Date range
         if 'date' in self.df.columns:
-            kpis['date_range_days']   = (self.df['date'].max() - self.df['date'].min()).days
+            kpis['date_range_days'] = (self.df['date'].max() - self.df['date'].min()).days
             kpis['avg_daily_revenue'] = kpis.get('total_revenue', 0) / max(kpis['date_range_days'], 1)
-
+        
         self.summary['kpis'] = kpis
         return kpis
     
@@ -371,13 +390,8 @@ class ReportGenerator:
         return None
 
     def _safe_group(self, dim_col: str, top_n: int = 15) -> pd.DataFrame:
-        """Group revenue by dim_col, return top_n sorted desc.
-        BUG FIX: gunakan baris sukses saja (revenue > 0) agar cancel/return tidak masuk chart.
-        """
+        """Group revenue by dim_col, return top_n sorted desc."""
         df = self.analyzer.df
-        # Gunakan revenue > 0 sebagai proxy untuk "sukses" — ini sudah di-handle oleh
-        # preprocessing.apply_status_revenue_filter (non-sukses revenue = 0)
-        df = df[df['revenue'] > 0] if 'revenue' in df.columns else df
         if dim_col not in df.columns or 'revenue' not in df.columns:
             return pd.DataFrame()
         g = df.groupby(dim_col)['revenue'].sum().nlargest(top_n).reset_index()
@@ -1203,121 +1217,106 @@ class ReportGenerator:
             kpis['avg_margin'] = 30.0
 
         # ── Branches / Regional Deep Dive ──
-        # BUG FIX: (1) gunakan revenue>0 agar cancel tidak masuk; (2) guard df_curr/df_prev kosong
         branches = []
-        if reg_col and 'revenue' in df.columns:
+        if reg_col and 'revenue' in df.columns and 'date' in df.columns:
             try:
-                df_ok = df[df['revenue'] > 0]
-                if df_ok.empty:
-                    raise ValueError("df_ok kosong setelah filter revenue>0")
+                # Split data menjadi 2 period: first half vs second half sebagai prev period
+                mid_date = df['date'].min() + (df['date'].max() - df['date'].min()) / 2
+                df_curr = df[df['date'] > mid_date]
+                df_prev = df[df['date'] <= mid_date]
 
-                if 'date' in df_ok.columns:
-                    mid_date = df_ok['date'].min() + (df_ok['date'].max() - df_ok['date'].min()) / 2
-                    df_curr  = df_ok[df_ok['date'] > mid_date]
-                    df_prev  = df_ok[df_ok['date'] <= mid_date]
-                    use_split = not df_curr.empty and not df_prev.empty
-                else:
-                    use_split = False
+                curr_grp = df_curr.groupby(reg_col).agg(
+                    revenue=('revenue', 'sum'),
+                    transactions=('revenue', 'count')
+                ).reset_index()
+                prev_grp = df_prev.groupby(reg_col).agg(
+                    revenue_prev=('revenue', 'sum')
+                ).reset_index()
 
-                if use_split:
-                    curr_g = df_curr.groupby(reg_col).agg(revenue=('revenue','sum'), transactions=('revenue','count')).reset_index()
-                    prev_g = df_prev.groupby(reg_col).agg(revenue_prev=('revenue','sum')).reset_index()
-                    merged = curr_g.merge(prev_g, on=reg_col, how='left')
-                    merged['revenue_prev'] = merged['revenue_prev'].fillna(0)
-                    merged['target']       = merged['revenue'] * 1.10
-                    for _, row in merged.sort_values('revenue', ascending=False).iterrows():
-                        branches.append({'name': str(row[reg_col]), 'revenue': sf(row['revenue']),
-                                         'revenue_prev': sf(row['revenue_prev']),
-                                         'transactions': int(row.get('transactions',0)),
-                                         'target': sf(row['target'])})
-                else:
-                    # Fallback: total tanpa split period
-                    g = df_ok.groupby(reg_col).agg(revenue=('revenue','sum'), transactions=('revenue','count')).reset_index()
-                    for _, row in g.sort_values('revenue', ascending=False).iterrows():
-                        rev = sf(row['revenue'])
-                        branches.append({'name': str(row[reg_col]), 'revenue': rev,
-                                         'revenue_prev': rev * 0.9,
-                                         'transactions': int(row.get('transactions',0)),
-                                         'target': rev * 1.10})
+                merged = curr_grp.merge(prev_grp, on=reg_col, how='left')
+                merged['revenue_prev'] = merged['revenue_prev'].fillna(0)
+
+                # Target = 110% dari current revenue sebagai simulasi
+                merged['target'] = merged['revenue'] * 1.10
+
+                for _, row in merged.sort_values('revenue', ascending=False).iterrows():
+                    branches.append({
+                        'name':         str(row[reg_col]),
+                        'revenue':      sf(row['revenue']),
+                        'revenue_prev': sf(row['revenue_prev']),
+                        'transactions': int(row.get('transactions', 0)),
+                        'target':       sf(row['target']),
+                    })
             except Exception as e:
                 logger.warning(f"Branches data error: {e}")
 
         # ── Channels ──
-        # BUG FIX: sama — revenue>0 + guard empty split
         channels = []
         ch_col = self._col(self._COL_CHANNEL)
-        if ch_col and 'revenue' in df.columns:
+        if ch_col and 'revenue' in df.columns and 'date' in df.columns:
             try:
-                df_ok = df[df['revenue'] > 0]
-                if df_ok.empty:
-                    raise ValueError("df_ok kosong")
+                mid_date = df['date'].min() + (df['date'].max() - df['date'].min()) / 2
+                df_curr = df[df['date'] > mid_date]
+                df_prev = df[df['date'] <= mid_date]
 
-                if 'date' in df_ok.columns:
-                    mid_date  = df_ok['date'].min() + (df_ok['date'].max() - df_ok['date'].min()) / 2
-                    df_curr   = df_ok[df_ok['date'] > mid_date]
-                    df_prev   = df_ok[df_ok['date'] <= mid_date]
-                    use_split = not df_curr.empty and not df_prev.empty
-                else:
-                    use_split = False
+                curr_ch = df_curr.groupby(ch_col).agg(
+                    revenue=('revenue', 'sum'),
+                    transactions=('revenue', 'count')
+                ).reset_index()
+                prev_ch = df_prev.groupby(ch_col).agg(
+                    revenue_prev=('revenue', 'sum')
+                ).reset_index()
 
-                if use_split:
-                    curr_ch = df_curr.groupby(ch_col).agg(revenue=('revenue','sum'), transactions=('revenue','count')).reset_index()
-                    prev_ch = df_prev.groupby(ch_col).agg(revenue_prev=('revenue','sum')).reset_index()
-                    merged_ch = curr_ch.merge(prev_ch, on=ch_col, how='left')
-                    merged_ch['revenue_prev'] = merged_ch['revenue_prev'].fillna(0)
-                    for _, row in merged_ch.sort_values('revenue', ascending=False).iterrows():
-                        channels.append({'name': str(row[ch_col]), 'revenue': sf(row['revenue']),
-                                         'revenue_prev': sf(row['revenue_prev']),
-                                         'transactions': int(row.get('transactions',0))})
-                else:
-                    g = df_ok.groupby(ch_col).agg(revenue=('revenue','sum'), transactions=('revenue','count')).reset_index()
-                    for _, row in g.sort_values('revenue', ascending=False).iterrows():
-                        rev = sf(row['revenue'])
-                        channels.append({'name': str(row[ch_col]), 'revenue': rev,
-                                         'revenue_prev': rev * 0.9,
-                                         'transactions': int(row.get('transactions',0))})
+                merged_ch = curr_ch.merge(prev_ch, on=ch_col, how='left')
+                merged_ch['revenue_prev'] = merged_ch['revenue_prev'].fillna(0)
+
+                for _, row in merged_ch.sort_values('revenue', ascending=False).iterrows():
+                    channels.append({
+                        'name':         str(row[ch_col]),
+                        'revenue':      sf(row['revenue']),
+                        'revenue_prev': sf(row['revenue_prev']),
+                        'transactions': int(row.get('transactions', 0)),
+                    })
             except Exception as e:
                 logger.warning(f"Channels data error: {e}")
 
         # ── Sales Persons ──
-        # BUG FIX: filter non-SP dulu, lalu guard empty split
         salespeople = []
         sp_col = self._col(self._COL_SALES)
-        if sp_col and 'revenue' in df.columns:
+        if sp_col and 'revenue' in df.columns and 'date' in df.columns:
             try:
+                mid_date = df['date'].min() + (df['date'].max() - df['date'].min()) / 2
+                df_curr = df[df['date'] > mid_date]
+                df_prev = df[df['date'] <= mid_date]
+
+                curr_sp = df_curr.groupby(sp_col).agg(
+                    revenue=('revenue', 'sum'),
+                    transactions=('revenue', 'count')
+                ).reset_index()
+                prev_sp = df_prev.groupby(sp_col).agg(
+                    revenue_prev=('revenue', 'sum')
+                ).reset_index()
+
+                merged_sp = curr_sp.merge(prev_sp, on=sp_col, how='left')
+                merged_sp['revenue_prev'] = merged_sp['revenue_prev'].fillna(0)
+
+                # Target = 110% dari current revenue sebagai simulasi
+                merged_sp['target'] = merged_sp['revenue'] * 1.10
+
+                # Filter out "Online" atau entry non-salesperson
                 non_sp = {'online', '-', 'n/a', 'none', ''}
-                df_ok  = df[df['revenue'] > 0]
-                df_ok  = df_ok[~df_ok[sp_col].astype(str).str.lower().str.strip().isin(non_sp)]
-                if df_ok.empty:
-                    raise ValueError("df_ok kosong setelah filter non-SP")
+                merged_sp = merged_sp[
+                    ~merged_sp[sp_col].str.lower().isin(non_sp)
+                ]
 
-                if 'date' in df_ok.columns:
-                    mid_date = df_ok['date'].min() + (df_ok['date'].max() - df_ok['date'].min()) / 2
-                    df_curr  = df_ok[df_ok['date'] > mid_date]
-                    df_prev  = df_ok[df_ok['date'] <= mid_date]
-                    use_split = not df_curr.empty and not df_prev.empty
-                else:
-                    use_split = False
-
-                if use_split:
-                    curr_sp = df_curr.groupby(sp_col).agg(revenue=('revenue','sum'), transactions=('revenue','count')).reset_index()
-                    prev_sp = df_prev.groupby(sp_col).agg(revenue_prev=('revenue','sum')).reset_index()
-                    merged_sp = curr_sp.merge(prev_sp, on=sp_col, how='left')
-                    merged_sp['revenue_prev'] = merged_sp['revenue_prev'].fillna(0)
-                    merged_sp['target']       = merged_sp['revenue'] * 1.10
-                    for _, row in merged_sp.sort_values('revenue', ascending=False).head(15).iterrows():
-                        salespeople.append({'name': str(row[sp_col]), 'revenue': sf(row['revenue']),
-                                            'revenue_prev': sf(row['revenue_prev']),
-                                            'transactions': int(row.get('transactions',0)),
-                                            'target': sf(row['target'])})
-                else:
-                    g = df_ok.groupby(sp_col).agg(revenue=('revenue','sum'), transactions=('revenue','count')).reset_index()
-                    for _, row in g.sort_values('revenue', ascending=False).head(15).iterrows():
-                        rev = sf(row['revenue'])
-                        salespeople.append({'name': str(row[sp_col]), 'revenue': rev,
-                                            'revenue_prev': rev * 0.9,
-                                            'transactions': int(row.get('transactions',0)),
-                                            'target': rev * 1.10})
+                for _, row in merged_sp.sort_values('revenue', ascending=False).head(15).iterrows():
+                    salespeople.append({
+                        'name':         str(row[sp_col]),
+                        'revenue':      sf(row['revenue']),
+                        'revenue_prev': sf(row['revenue_prev']),
+                        'transactions': int(row.get('transactions', 0)),
+                        'target':       sf(row['target']),
+                    })
             except Exception as e:
                 logger.warning(f"Salespeople data error: {e}")
 
@@ -1342,50 +1341,17 @@ class ReportGenerator:
             'salespeople':       salespeople,
         })
 
-        # ── Generate PPTX dengan pure Python (python-pptx) ──
-        # Tidak perlu Node.js — bekerja di Streamlit Cloud & semua environment
+        # ── Generate PPTX dengan pure Python (anti-cache) ──
         try:
-            import sys as _sys, importlib.util as _ilu
+            build_presentation = get_pptx_builder()
 
-            # ── BUG FIX: bersihkan SEMUA cache terkait generate_pptx_py ────
-            # Streamlit punya internal module cache sendiri — tanpa ini, versi
-            # lama (9 slide) bisa terus terpakai meski file sudah diupdate ke 12 slide.
-            for _key in list(_sys.modules.keys()):
-                if 'generate_pptx_py' in _key:
-                    del _sys.modules[_key]
+            logger.info("✅ generate_pptx_py.py loaded FRESH (12 slides)")
 
-            # Cari generate_pptx_py di folder yang sama dengan utils.py
-            _gen_candidates = [
-                Path(__file__).parent / 'generate_pptx_py.py',
-                Path('generate_pptx_py.py'),
-            ]
-            _gen_path = next((p for p in _gen_candidates if p.exists()), None)
-            if _gen_path is None:
-                raise FileNotFoundError(
-                    "generate_pptx_py.py tidak ditemukan. "
-                    "Letakkan di folder yang sama dengan utils.py."
-                )
+            build_presentation(payload, output_path)
 
-            # Load module fresh dari disk — TIDAK di-cache ke sys.modules
-            _spec = _ilu.spec_from_file_location('generate_pptx_py', str(_gen_path))
-            _mod  = _ilu.module_from_spec(_spec)
-            # Register sementara supaya relative import di dalam module bisa resolve
-            _sys.modules['generate_pptx_py'] = _mod
-            try:
-                _spec.loader.exec_module(_mod)
-            finally:
-                # Hapus dari cache setelah exec agar Streamlit tidak pakai versi lama
-                _sys.modules.pop('generate_pptx_py', None)
-
-            # Verifikasi jumlah slide sebelum generate (debugging aid)
-            _total_slides = getattr(_mod, 'TOTAL', '?')
-            logger.info(f"generate_pptx_py loaded dari: {_gen_path}  |  TOTAL slides: {_total_slides}")
-
-            _mod.build_presentation(payload, output_path)
-        except ImportError as e:
-            raise RuntimeError(
-                f"python-pptx tidak terinstall. Jalankan: pip install python-pptx\n{e}"
-            )
+        except Exception as e:
+            logger.error(f"PPTX error: {e}")
+            raise
 
         logger.info(f"PPTX exported → {output_path}  ({Path(output_path).stat().st_size // 1024} KB)")
         return str(output_path)
