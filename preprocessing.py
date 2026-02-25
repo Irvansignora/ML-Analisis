@@ -330,9 +330,9 @@ class DataPreprocessor:
         logger.info(f"Columns standardized: {new_columns}")
 
         # ── FALLBACK: pastikan kolom wajib ada ───────────────────────────────
-        # product fallback (jangan pakai store/toko sebagai proxy product!)
+        # product fallback — status & courier TIDAK boleh jadi proxy product
         if 'product' not in df.columns:
-            for fallback in ['category', 'status', 'courier', 'channel']:
+            for fallback in ['category', 'channel']:
                 if fallback in df.columns:
                     col_dtype = df[fallback].dtype
                     if col_dtype == object or str(col_dtype) == 'string':
@@ -343,9 +343,9 @@ class DataPreprocessor:
                 df['product'] = 'Unknown'
                 logger.warning("Kolom 'product' tidak ditemukan, diisi 'Unknown'")
 
-        # category fallback
+        # category fallback — status TIDAK boleh jadi proxy category
         if 'category' not in df.columns:
-            for fallback in ['channel', 'courier', 'status']:
+            for fallback in ['channel', 'courier']:
                 if fallback in df.columns:
                     df['category'] = df[fallback].astype(str)
                     logger.info(f"category proxy: '{fallback}'")
