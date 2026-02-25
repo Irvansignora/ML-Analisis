@@ -392,13 +392,8 @@ def render_sidebar():
                     filtered = filtered[filtered['region'].isin(sel_reg)]
                 if sel_ch and 'channel' in df.columns:
                     filtered = filtered[filtered['channel'].isin(sel_ch)]
-                st.session_state.df_filtered      = filtered
-                st.session_state.analyzer         = SalesAnalyzer(filtered)
-                # BUG FIX: reset forecast saat filter berubah supaya chart
-                # tidak menampilkan forecast lama yang dilatih dari data berbeda.
-                st.session_state.forecast_df      = None
-                st.session_state.forecast_metrics = None
-                st.session_state.forecaster       = None
+                st.session_state.df_filtered = filtered
+                st.session_state.analyzer    = SalesAnalyzer(filtered)
                 st.success(f"Filter diterapkan: {len(filtered):,} records")
 
             if st.button("❌ Reset Filter"):
@@ -415,17 +410,12 @@ def tab_kpi():
     df = get_df()
     if df is None: return empty("📂","Belum ada data","Upload file atau load sample data")
 
-    # Hitung revenue hanya dari transaksi sukses (untuk KPI utama)
-    txn = len(df)
-    txn_ok = int(df['is_successful_transaction'].sum()) if 'is_successful_transaction' in df.columns else txn
-    if 'revenue' in df.columns:
-        if 'is_successful_transaction' in df.columns:
-            rev = df.loc[df['is_successful_transaction'], 'revenue'].sum()
-        else:
-            rev = df['revenue'].sum()
-    else:
-        rev = 0
+    # BUG FIX: revenue sudah di-zero untuk non-sukses oleh preprocessing
+    rev = df['revenue'].sum() if 'revenue' in df.columns else 0
     qty = df['quantity'].sum() if 'quantity' in df.columns else 0
+    txn = len(df)
+    # AOV harus berdasarkan transaksi sukses saja
+    txn_ok = int(df['is_successful_transaction'].sum()) if 'is_successful_transaction' in df.columns else txn
     aov = rev / txn_ok if txn_ok else 0
 
     cost_col = 'cost' if 'cost' in df.columns else ('hpp' if 'hpp' in df.columns else None)
@@ -1165,6 +1155,182 @@ def tab_anomaly():
             empty("🚨","Belum ada hasil","Klik Deteksi Anomali")
 
 # ── TAB 8: FORECAST ───────────────────────────────────────────────────────────
+
+# ── FORECAST INSIGHT ENGINE ───────────────────────────────────────────────────
+def generate_forecast_insights(fc_df, hist_df):
+    fc   = fc_df.copy()
+    hist = hist_df.copy()
+    fc['date']   = pd.to_datetime(fc['date'])
+    hist['date'] = pd.to_datetime(hist['date'])
+
+    total_forecast  = fc['forecast'].sum()
+    avg_daily       = fc['forecast'].mean()
+    max_day         = fc.loc[fc['forecast'].idxmax()]
+    min_day         = fc.loc[fc['forecast'].idxmin()]
+
+    mid             = len(fc) // 2
+    avg_first_half  = fc['forecast'].iloc[:mid].mean()
+    avg_second_half = fc['forecast'].iloc[mid:].mean()
+    trend_pct       = ((avg_second_half - avg_first_half) / avg_first_half * 100) if avg_first_half else 0
+
+    n_periods    = len(fc)
+    hist_recent  = hist.tail(n_periods)
+    avg_hist     = hist_recent['revenue'].mean()
+    vs_hist_pct  = ((avg_daily - avg_hist) / avg_hist * 100) if avg_hist else 0
+
+    fc['week']         = fc['date'].dt.isocalendar().week.astype(int)
+    weekly             = fc.groupby('week')['forecast'].mean()
+    worst_week         = int(weekly.idxmin())
+    worst_week_avg     = float(weekly.min())
+    worst_week_drop_pct = ((worst_week_avg - avg_daily) / avg_daily * 100) if avg_daily else 0
+
+    fc['is_weekend']   = fc['date'].dt.dayofweek.isin([5, 6])
+    avg_weekend        = fc[fc['is_weekend']]['forecast'].mean()
+    avg_weekday        = fc[~fc['is_weekend']]['forecast'].mean()
+    weekend_diff_pct   = ((avg_weekend - avg_weekday) / avg_weekday * 100) if avg_weekday else 0
+    volatility_pct     = (fc['forecast'].std() / avg_daily * 100) if avg_daily else 0
+
+    if trend_pct < -15 or worst_week_drop_pct < -30:
+        risk = 'HIGH'
+    elif trend_pct < -5 or worst_week_drop_pct < -15:
+        risk = 'MEDIUM'
+    else:
+        risk = 'LOW'
+
+    return dict(
+        total_forecast=total_forecast, avg_daily=avg_daily, avg_hist=avg_hist,
+        vs_hist_pct=vs_hist_pct, trend_pct=trend_pct, max_day=max_day, min_day=min_day,
+        worst_week=worst_week, worst_week_avg=worst_week_avg,
+        worst_week_drop_pct=worst_week_drop_pct, avg_weekend=avg_weekend,
+        avg_weekday=avg_weekday, weekend_diff_pct=weekend_diff_pct,
+        volatility_pct=volatility_pct, risk=risk, n_periods=n_periods,
+    )
+
+
+def render_forecast_insights(ins):
+    section("📊 Ringkasan Forecast")
+    c1, c2, c3, c4 = st.columns(4)
+    trend_up   = ins['trend_pct'] >= 0
+    vs_hist_up = ins['vs_hist_pct'] >= 0
+    risk_icon  = {'LOW': '🟢', 'MEDIUM': '🟡', 'HIGH': '🔴'}[ins['risk']]
+    with c1: kpi('c1', '💰', format_currency(ins['total_forecast']),
+                 f"Total Forecast {ins['n_periods']} Hari")
+    with c2: kpi('c2', '📅', format_currency(ins['avg_daily']),
+                 'Rata-rata / Hari', f"{ins['vs_hist_pct']:+.1f}% vs historis", vs_hist_up)
+    with c3: kpi('c3', '📈', f"{ins['trend_pct']:+.1f}%",
+                 'Trend (paruh awal → akhir)', None, trend_up)
+    with c4: kpi('c4', risk_icon, ins['risk'], 'Risk Level', None, ins['risk'] == 'LOW')
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    section("📅 Hari Terbaik & Terburuk")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown(f"""
+        <p class="card-title">🏆 Hari Terbaik</p>
+        <p style="font-size:1.4rem;font-weight:700;color:#10b981;">{format_currency(ins['max_day']['forecast'])}</p>
+        <p style="color:#94a3b8;">{ins['max_day']['date'].strftime('%A, %d %B %Y')}</p>
+        """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown(f"""
+        <p class="card-title">⚠️ Hari Terburuk</p>
+        <p style="font-size:1.4rem;font-weight:700;color:#ef4444;">{format_currency(ins['min_day']['forecast'])}</p>
+        <p style="color:#94a3b8;">{ins['min_day']['date'].strftime('%A, %d %B %Y')}</p>
+        """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    section("📉 Analisis Trend & Pola")
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    trend_color = '#10b981' if ins['trend_pct'] >= 0 else '#ef4444'
+    trend_label = 'NAIK' if ins['trend_pct'] >= 0 else 'TURUN'
+    wknd_color  = '#10b981' if ins['weekend_diff_pct'] >= 0 else '#ef4444'
+    wknd_label  = 'lebih tinggi' if ins['weekend_diff_pct'] >= 0 else 'lebih rendah'
+    vol_note    = ('— relatif stabil ✅' if ins['volatility_pct'] < 30
+                   else '— cukup fluktuatif ⚠️' if ins['volatility_pct'] < 60
+                   else '— sangat fluktuatif 🔴')
+    hist_color  = '#10b981' if ins['vs_hist_pct'] >= 0 else '#ef4444'
+    st.markdown(f"""
+    <p class="card-title">🔍 Temuan Utama</p>
+    <ul style="color:#cbd5e1;line-height:2.1;margin:0;padding-left:20px;">
+      <li>Trend revenue forecast <strong style="color:{trend_color}">{trend_label} {abs(ins['trend_pct']):.1f}%</strong> dari paruh pertama ke paruh kedua periode.</li>
+      <li>Revenue weekend rata-rata <strong style="color:{wknd_color}">{wknd_label} {abs(ins['weekend_diff_pct']):.1f}%</strong> dibanding hari kerja ({format_currency(ins['avg_weekend'])} vs {format_currency(ins['avg_weekday'])}).</li>
+      <li>Minggu dengan forecast terendah: <strong style="color:#f59e0b">Minggu ke-{ins['worst_week']}</strong> (rata-rata {format_currency(ins['worst_week_avg'])}, {ins['worst_week_drop_pct']:.1f}% dari rata-rata harian).</li>
+      <li>Volatilitas forecast: <strong style="color:#a78bfa">{ins['volatility_pct']:.1f}%</strong> {vol_note}.</li>
+      <li>Perbandingan vs {ins['n_periods']} hari historis terakhir: <strong style="color:{hist_color}">{ins['vs_hist_pct']:+.1f}%</strong>.</li>
+    </ul>
+    """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    section("💡 Rekomendasi Aksi Bisnis")
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    st.markdown('<p class="card-title">🎯 Action Plan berdasarkan Forecast</p>', unsafe_allow_html=True)
+
+    actions = []
+    if ins['trend_pct'] < -15:
+        actions.append(("🔴", "URGENT — Penurunan Trend Tajam",
+            f"Revenue diprediksi turun {abs(ins['trend_pct']):.1f}% menuju akhir periode. "
+            "Segera evaluasi pricing, aktifkan kampanye retensi pelanggan, dan review pipeline penjualan minggu depan."))
+    elif ins['trend_pct'] < -5:
+        actions.append(("🟡", "PERHATIAN — Trend Menurun Moderat",
+            f"Ada penurunan {abs(ins['trend_pct']):.1f}% di paruh kedua. "
+            "Pertimbangkan promo bundling atau diskon loyalitas untuk menjaga momentum."))
+    elif ins['trend_pct'] > 15:
+        actions.append(("🟢", "OPPORTUNITY — Trend Sangat Positif",
+            f"Revenue diprediksi naik {ins['trend_pct']:.1f}%. Pastikan stok & kapasitas operasional siap. "
+            "Manfaatkan momentum untuk upselling produk premium."))
+    elif ins['trend_pct'] > 5:
+        actions.append(("🟢", "POSITIF — Trend Menguat",
+            f"Pertumbuhan {ins['trend_pct']:.1f}% terdeteksi. Perkuat strategi yang sedang berjalan dan siapkan stok tambahan."))
+
+    if ins['worst_week_drop_pct'] < -20:
+        actions.append(("🟡", f"ANTISIPASI — Potensi Drop Minggu ke-{ins['worst_week']}",
+            f"Forecast menunjukkan penurunan {abs(ins['worst_week_drop_pct']):.1f}% pada minggu ke-{ins['worst_week']}. "
+            "Jadwalkan flash sale atau event khusus di minggu tersebut."))
+
+    if ins['weekend_diff_pct'] > 20:
+        actions.append(("📅", "POLA WEEKEND — Revenue Akhir Pekan Dominan",
+            f"Weekend {ins['weekend_diff_pct']:.1f}% lebih tinggi dari weekday. "
+            "Alokasikan lebih banyak budget iklan dan tim CS di akhir pekan."))
+    elif ins['weekend_diff_pct'] < -20:
+        actions.append(("📅", "POLA WEEKDAY — Revenue Hari Kerja Dominan",
+            f"Weekday {abs(ins['weekend_diff_pct']):.1f}% lebih tinggi. "
+            "Fokuskan aktivitas penjualan dan follow-up prospek di hari kerja."))
+
+    if ins['volatility_pct'] > 60:
+        actions.append(("⚠️", "VOLATILITAS TINGGI — Fluktuasi Ekstrem Terdeteksi",
+            "Variasi harian yang ekstrem terdeteksi. Buat buffer stok/cashflow minimal 2x rata-rata "
+            "harian dan identifikasi faktor pemicu lonjakan/drop."))
+
+    if ins['vs_hist_pct'] < -10:
+        actions.append(("🔴", "BELOW HISTORICAL — Di Bawah Performa Historis",
+            f"Prediksi {abs(ins['vs_hist_pct']):.1f}% lebih rendah dari periode historis yang sama. "
+            "Review apakah ada faktor eksternal atau strategi yang perlu diperbaiki."))
+    elif ins['vs_hist_pct'] > 10:
+        actions.append(("🟢", "ABOVE HISTORICAL — Melampaui Historis",
+            f"Prediksi {ins['vs_hist_pct']:.1f}% lebih tinggi dari historis. "
+            "Pastikan kapasitas fulfillment, gudang, dan tim support siap menghadapi lonjakan."))
+
+    if not actions:
+        actions.append(("🟢", "STABIL — Kondisi Forecast Normal",
+            "Tidak ada sinyal peringatan signifikan. Lanjutkan strategi saat ini dan monitor aktual vs forecast setiap minggu."))
+
+    color_map = {'🔴': '#ef4444', '🟡': '#f59e0b', '🟢': '#10b981', '📅': '#06b6d4', '⚠️': '#f59e0b'}
+    for emoji, title_act, desc in actions:
+        color = color_map.get(emoji, '#64748b')
+        st.markdown(f"""
+        <div style="border-left:3px solid {color};padding:10px 16px;margin-bottom:12px;
+                    background:rgba(255,255,255,0.03);border-radius:0 8px 8px 0;">
+            <span style="background:{color};color:#000;font-size:0.7rem;font-weight:700;
+                         padding:2px 8px;border-radius:4px;">{emoji} {title_act}</span>
+            <p style="color:#94a3b8;margin:8px 0 0;font-size:0.88rem;">{desc}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
 def tab_forecast():
     st.markdown('<div class="hero-header"><p class="hero-title">🔮 Sales Forecast</p><p class="hero-sub">Prediksi revenue 1–6 bulan ke depan dengan ML</p></div>', unsafe_allow_html=True)
     df = get_df()
@@ -1192,16 +1358,8 @@ def tab_forecast():
         st.markdown("---")
 
         if st.button("🚀 Train & Forecast", type="primary"):
-            # BUG FIX: Pakai langsung nilai dari UI widget, bukan dari session state.
-            # Sebelumnya pakai saved_model_type/saved_forecast_periods sehingga
-            # model yang dijalankan selalu yang terakhir disimpan, bukan yang dipilih.
-            run_model   = model_type
-            run_periods = periods
-            # Reset state lama dulu supaya chart/feature importance lama
-            # tidak tertampil jika training gagal di tengah jalan.
-            st.session_state.forecast_df      = None
-            st.session_state.forecast_metrics = None
-            st.session_state.forecaster       = None
+            run_model   = st.session_state.get('saved_model_type', model_type)
+            run_periods = st.session_state.get('saved_forecast_periods', periods)
             with st.spinner(f"Training {run_model}..."):
                 try:
                     fc = SalesForecaster(model_type=run_model)
@@ -1223,35 +1381,54 @@ def tab_forecast():
     with c2:
         if st.session_state.forecast_df is not None:
             fc_df = st.session_state.forecast_df
+
+            # ── Chart Forecast vs Historical ──
             st.markdown('<div class="glass-card"><p class="card-title">📈 Forecast vs Historical</p>', unsafe_allow_html=True)
             if 'date' in df.columns:
                 daily = df.groupby(df['date'].dt.date)['revenue'].sum().reset_index()
-                # BUG FIX: potong historis sesuai jumlah periods yang dipilih user
-                # supaya chart tidak menampilkan semua data dari tahun-tahun sebelumnya.
-                # Historis ditampilkan sejumlah run_periods hari ke belakang dari tanggal terakhir,
-                # sehingga chart simetris: N hari historis + N hari forecast.
-                n_periods = len(fc_df) if fc_df is not None else periods
-                cutoff = daily['date'].max() - pd.Timedelta(days=n_periods)
-                daily_trimmed = daily[daily['date'] > cutoff]
+                daily.columns = ['date', 'revenue']
+                # Potong historis sesuai jumlah periode forecast (simetris)
+                n_periods = len(fc_df)
+                cutoff = pd.to_datetime(daily['date']).max() - pd.Timedelta(days=n_periods)
+                daily_trimmed = daily[pd.to_datetime(daily['date']) > cutoff]
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(x=daily_trimmed['date'], y=daily_trimmed['revenue'], fill='tozeroy', mode='lines', name='Historis',
-                                         line=dict(color='#06b6d4', width=2), fillcolor='rgba(6,182,212,0.1)'))
+                fig.add_trace(go.Scatter(
+                    x=daily_trimmed['date'], y=daily_trimmed['revenue'],
+                    fill='tozeroy', mode='lines', name='Historis',
+                    line=dict(color='#06b6d4', width=2), fillcolor='rgba(6,182,212,0.1)'))
                 if 'forecast' in fc_df.columns:
-                    fig.add_trace(go.Scatter(x=fc_df['date'], y=fc_df['forecast'], mode='lines', name='Forecast',
-                                             line=dict(color='#f59e0b', width=2, dash='dash')))
+                    fig.add_trace(go.Scatter(
+                        x=fc_df['date'], y=fc_df['forecast'],
+                        mode='lines', name='Forecast',
+                        line=dict(color='#f59e0b', width=2, dash='dash')))
                 ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown(dl(fc_df, 'forecast.csv', 'Download Forecast CSV'), unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
+
+            # ── Feature Importance ──
             if st.session_state.forecaster:
                 imp = st.session_state.forecaster.get_feature_importance()
                 if not imp.empty and imp['importance'].sum() > 0:
                     st.markdown('<div class="glass-card"><p class="card-title">🔍 Feature Importance</p>', unsafe_allow_html=True)
                     top = imp.head(12)
-                    fig = go.Figure(go.Bar(x=top['importance'], y=top['feature'], orientation='h',
-                                          marker=dict(color=top['importance'], colorscale=[[0,'#0c4a6e'],[1,'#38bdf8']])))
+                    fig = go.Figure(go.Bar(
+                        x=top['importance'], y=top['feature'], orientation='h',
+                        marker=dict(color=top['importance'], colorscale=[[0,'#0c4a6e'],[1,'#38bdf8']])))
                     fig.update_layout(yaxis=dict(autorange='reversed'))
                     ct(fig); st.plotly_chart(fig, width='stretch')
                     st.markdown('</div>', unsafe_allow_html=True)
+
+            # ── Insight & Rekomendasi Otomatis ──
+            if 'date' in df.columns and 'forecast' in fc_df.columns:
+                try:
+                    daily_hist = df.groupby(df['date'].dt.date)['revenue'].sum().reset_index()
+                    daily_hist.columns = ['date', 'revenue']
+                    daily_hist['date'] = pd.to_datetime(daily_hist['date'])
+                    ins = generate_forecast_insights(fc_df, daily_hist)
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    render_forecast_insights(ins)
+                except Exception as e:
+                    st.warning(f"⚠️ Tidak bisa generate insight: {e}")
         else:
             empty("🔮","Belum ada forecast","Klik Train & Forecast")
 
