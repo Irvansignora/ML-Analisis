@@ -764,24 +764,45 @@ def tab_profit():
         prod_p = df2.groupby('product').agg(
             revenue=('revenue','sum'), profit=('profit','sum'), txn=('revenue','count')
         ).reset_index()
-        prod_p['margin_pct'] = prod_p['profit'] / prod_p['revenue'] * 100
+
+        if cost_col:
+            # Ada HPP aktual — margin per produk dihitung dari data real
+            prod_p['margin_pct'] = prod_p['profit'] / prod_p['revenue'] * 100
+        else:
+            # Tidak ada HPP — profit per produk dihitung ulang dari revenue x margin slider
+            manual_margin        = st.session_state.get('manual_margin_pct', 30)
+            prod_p['margin_pct'] = float(manual_margin)
+            prod_p['profit']     = prod_p['revenue'] * manual_margin / 100
 
         section("📊 Profit per Produk")
+        if not cost_col:
+            manual_margin = st.session_state.get('manual_margin_pct', 30)
+            st.info(f"ℹ️ Margin per produk diestimasi flat **{manual_margin}%** sesuai slider. "
+                    f"Geser slider di atas untuk melihat perubahan profit per produk.")
+
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown('<div class="glass-card"><p class="card-title">🏆 Top 10 Produk by Margin %</p>', unsafe_allow_html=True)
-            top_m = prod_p.sort_values('margin_pct', ascending=False).head(10)
-            fig = go.Figure(go.Bar(x=top_m['margin_pct'], y=top_m['product'], orientation='h',
-                                   marker=dict(color=top_m['margin_pct'], colorscale=[[0,'#064e3b'],[1,'#10b981']])))
-            fig.update_layout(yaxis=dict(autorange='reversed'), xaxis=dict(ticksuffix='%'))
+            st.markdown('<div class="glass-card"><p class="card-title">🏆 Top 10 Produk by Profit</p>', unsafe_allow_html=True)
+            top_m = prod_p.sort_values('profit', ascending=False).head(10)
+            fig = go.Figure(go.Bar(
+                x=top_m['profit'], y=top_m['product'], orientation='h',
+                name='Profit', marker=dict(color='#10b981'),
+                text=top_m['profit'].apply(format_currency),
+                textposition='outside', textfont=dict(color='#e0f2fe', size=9)))
+            fig.update_layout(yaxis=dict(autorange='reversed'), xaxis_title='Profit (Rp)')
             ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown('</div>', unsafe_allow_html=True)
         with c2:
-            st.markdown('<div class="glass-card"><p class="card-title">💸 Produk Margin Terendah (Rugi?)</p>', unsafe_allow_html=True)
-            bot_m = prod_p.sort_values('margin_pct').head(10)
-            colors_bar = ['#ef4444' if x < 0 else '#f97316' if x < 10 else '#f59e0b' for x in bot_m['margin_pct']]
-            fig = go.Figure(go.Bar(x=bot_m['margin_pct'], y=bot_m['product'], orientation='h', marker_color=colors_bar))
-            fig.update_layout(yaxis=dict(autorange='reversed'), xaxis=dict(ticksuffix='%'))
+            st.markdown('<div class="glass-card"><p class="card-title">💸 Produk Profit Terendah</p>', unsafe_allow_html=True)
+            bot_m      = prod_p.sort_values('profit').head(10)
+            colors_bar = ['#ef4444' if x < 0 else '#f97316' if x < (prod_p['profit'].mean() * 0.3) else '#f59e0b'
+                          for x in bot_m['profit']]
+            fig = go.Figure(go.Bar(
+                x=bot_m['profit'], y=bot_m['product'], orientation='h',
+                marker_color=colors_bar,
+                text=bot_m['profit'].apply(format_currency),
+                textposition='outside', textfont=dict(color='#e0f2fe', size=9)))
+            fig.update_layout(yaxis=dict(autorange='reversed'), xaxis_title='Profit (Rp)')
             ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -803,7 +824,7 @@ def tab_profit():
         tbl['Margin %']  = tbl['margin_pct'].apply(lambda x: f"{x:.1f}%")
         tbl['Transaksi'] = tbl['txn']
         st.dataframe(tbl[['product','Revenue','Profit','Margin %','Transaksi']]
-                     .rename(columns={'product':'Produk'}).sort_values('Margin %', ascending=False),
+                     .rename(columns={'product':'Produk'}).sort_values('Profit', ascending=False),
                      height=300)
         st.markdown(dl(prod_p, 'profitability.csv', 'Download CSV'), unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
