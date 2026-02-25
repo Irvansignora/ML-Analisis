@@ -1322,7 +1322,7 @@ class ReportGenerator:
         # ── Generate PPTX dengan pure Python (python-pptx) ──
         # Tidak perlu Node.js — bekerja di Streamlit Cloud & semua environment
         try:
-            import sys, importlib
+            import sys as _sys, importlib.util as _ilu
             # Cari generate_pptx_py di folder yang sama dengan utils.py
             _gen_candidates = [
                 Path(__file__).parent / 'generate_pptx_py.py',
@@ -1334,11 +1334,11 @@ class ReportGenerator:
                     "generate_pptx_py.py tidak ditemukan. "
                     "Letakkan di folder yang sama dengan utils.py."
                 )
-            import importlib.util as _ilu
-            # Force reload — buang cache lama agar versi terbaru selalu dipakai
-            sys.modules.pop('generate_pptx_py', None)
-            _spec = _ilu.spec_from_file_location("generate_pptx_py", str(_gen_path))
+            # Selalu buang cache lama → paksa baca file terbaru dari disk setiap kali
+            _sys.modules.pop('generate_pptx_py', None)
+            _spec = _ilu.spec_from_file_location('generate_pptx_py', str(_gen_path))
             _mod  = _ilu.module_from_spec(_spec)
+            # Jangan register ke sys.modules agar tidak di-cache Streamlit
             _spec.loader.exec_module(_mod)
             _mod.build_presentation(payload, output_path)
         except ImportError as e:
