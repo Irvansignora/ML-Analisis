@@ -269,6 +269,27 @@ def kpi(color, icon, value, label, delta=None, delta_up=True):
         {d}
     </div>''', unsafe_allow_html=True)
 
+# ── BUG FIX: guard global untuk validasi kolom 'product' ─────────────────────
+# Mencegah kolom 'status' yang salah mapping tampil sebagai chart produk
+_STATUS_GUARD = {
+    'selesai', 'completed', 'complete', 'sukses', 'success',
+    'dikirim', 'shipped', 'diproses', 'processing', 'pending',
+    'menunggu', 'cancel', 'cancelled', 'dibatalkan',
+    'return', 'returned', 'dikembalikan', 'refund', 'gagal', 'failed',
+    'lunas', 'unpaid', 'paid',
+}
+
+def _is_product_col_valid(df):
+    """Return True jika kolom 'product' berisi data produk yang valid (bukan data status)."""
+    if 'product' not in df.columns:
+        return False
+    sample = set(df['product'].dropna().astype(str).str.lower().str.strip().unique()[:30])
+    if len(sample) == 0:
+        return False
+    overlap = sample & _STATUS_GUARD
+    # Kolom dianggap salah mapping jika >40% nilai uniknya adalah nilai status
+    return len(overlap) / len(sample) <= 0.4
+
 def get_df():
     return st.session_state.df_filtered if st.session_state.df_filtered is not None else st.session_state.df
 
@@ -460,7 +481,10 @@ def tab_sales():
     if 'revenue' not in df.columns: return empty("⚠️","Kolom revenue tidak ditemukan")
 
     section("🔝 Top & Bottom Produk")
-    if 'product' in df.columns:
+
+    # BUG FIX: validasi kolom 'product' via fungsi global _is_product_col_valid
+    # mencegah data status transaksi tampil sebagai chart produk
+    if _is_product_col_valid(df):
         prod = df.groupby('product').agg(
             revenue=('revenue','sum'),
             qty=('quantity','sum') if 'quantity' in df.columns else ('revenue','count'),
@@ -681,7 +705,7 @@ def tab_profit():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    if 'product' in df2.columns:
+    if _is_product_col_valid(df2):
         prod_p = df2.groupby('product').agg(
             revenue=('revenue','sum'), profit=('profit','sum'), txn=('revenue','count')
         ).reset_index()
@@ -888,7 +912,8 @@ def tab_category():
             st.markdown('</div>', unsafe_allow_html=True)
 
     section("📐 Pareto Analysis (80/20 Rule)")
-    if 'product' in df.columns:
+    # BUG FIX: gunakan fungsi validasi yang sama seperti tab_sales
+    if _is_product_col_valid(df):
         st.markdown('<div class="glass-card"><p class="card-title">📐 Produk mana yang hasilkan 80% Revenue?</p>', unsafe_allow_html=True)
         prod = df.groupby('product')['revenue'].sum().sort_values(ascending=False).reset_index()
         prod['cumsum'] = prod['revenue'].cumsum()
@@ -913,6 +938,8 @@ def tab_category():
         slow['Share %'] = slow['share'].apply(lambda x: f"{x:.2f}%")
         st.dataframe(slow[['product','Revenue','Share %']].rename(columns={'product':'Produk'}), height=250)
         st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.info("ℹ️ Kolom produk tidak ditemukan atau data produk tidak valid di dataset ini.")
 
 
 # ── GROWTH ANALYSIS ───────────────────────────────────────────────────────────
