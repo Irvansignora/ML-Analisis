@@ -1116,41 +1116,103 @@ def tab_anomaly():
     c1, c2 = st.columns([1, 3])
     with c1:
         st.markdown('<div class="glass-card"><p class="card-title">⚙️ Settings</p>', unsafe_allow_html=True)
-        method = st.selectbox("Metode", ['isolation_forest','zscore'])
+        method        = st.selectbox("Metode", ['isolation_forest','zscore'])
         contamination = st.slider("Expected Outlier %", 1, 20, 5) / 100
+
+        st.markdown("---")
+        st.markdown("**📅 Rentang Tampilan**")
+        range_options = {
+            '7 Hari Terakhir':  7,
+            '14 Hari Terakhir': 14,
+            '30 Hari Terakhir': 30,
+            '60 Hari Terakhir': 60,
+            '90 Hari Terakhir': 90,
+            '6 Bulan Terakhir': 180,
+            '1 Tahun Terakhir': 365,
+            'Semua Data':       0,
+        }
+        selected_range = st.selectbox("Tampilkan data", list(range_options.keys()), index=2)
+        display_days   = range_options[selected_range]
+
         if st.button("🔍 Deteksi Anomali", type="primary"):
+            # Reset dulu supaya hasil lama tidak tertampil jika gagal
+            st.session_state.anomaly_df   = None
+            st.session_state.detector     = None
+            st.session_state.anomaly_days = display_days
             with st.spinner("Mendeteksi..."):
                 try:
-                    det = AnomalyDetector(method=method, contamination=contamination)
+                    det     = AnomalyDetector(method=method, contamination=contamination)
                     anom_df = det.fit(df)
                     st.session_state.detector   = det
                     st.session_state.anomaly_df = anom_df
                     n = int(anom_df['anomaly'].sum())
                     st.success(f"✅ {n} anomali ({n/len(anom_df)*100:.1f}%)")
                 except Exception as e: st.error(f"❌ {e}")
+        else:
+            # Update display_days tiap user ganti pilihan tanpa harus re-train
+            st.session_state.anomaly_days = display_days
+
         st.markdown('</div>', unsafe_allow_html=True)
 
     with c2:
         if st.session_state.anomaly_df is not None:
-            adf = st.session_state.anomaly_df
-            normal, anoms = adf[adf['anomaly']==0], adf[adf['anomaly']==1]
-            c_a, c_b, c_c = st.columns(3)
-            with c_a: st.metric("Total Data", f"{len(adf):,}")
-            with c_b: st.metric("Normal", f"{len(normal):,}")
-            with c_c: st.metric("🚨 Anomali", f"{len(anoms):,}")
+            adf    = st.session_state.anomaly_df.copy()
+            n_days = st.session_state.get('anomaly_days', 0)
+
+            # ── Filter rentang waktu untuk tampilan ──
+            if n_days > 0 and 'date' in adf.columns:
+                cutoff   = pd.to_datetime(adf['date']).max() - pd.Timedelta(days=n_days)
+                adf_view = adf[pd.to_datetime(adf['date']) > cutoff].copy()
+                if adf_view.empty:
+                    st.warning(f"⚠️ Tidak ada data dalam {selected_range}. Menampilkan semua data.")
+                    adf_view = adf.copy()
+            else:
+                adf_view = adf.copy()
+
+            normal = adf_view[adf_view['anomaly'] == 0]
+            anoms  = adf_view[adf_view['anomaly'] == 1]
+
+            # Label info periode
+            period_label = st.session_state.get('anomaly_days', 0)
+            disp_label   = selected_range
+            st.markdown(
+                f'<div style="color:#94a3b8;font-size:0.82rem;margin-bottom:8px;">'
+                f'📅 Menampilkan: <strong style="color:#06b6d4">{disp_label}</strong>'
+                f' &nbsp;·&nbsp; {len(adf_view):,} transaksi dari total {len(adf):,}'
+                f'</div>', unsafe_allow_html=True)
+
+            # ── KPI ──
+            c_a, c_b, c_c, c_d = st.columns(4)
+            with c_a: st.metric("Total Ditampilkan", f"{len(adf_view):,}")
+            with c_b: st.metric("Normal",            f"{len(normal):,}")
+            with c_c: st.metric("🚨 Anomali",        f"{len(anoms):,}")
+            with c_d: st.metric("Anomali Rate",
+                                f"{len(anoms)/len(adf_view)*100:.1f}%" if len(adf_view) else "0%")
+
+            # ── Chart ──
             st.markdown('<div class="glass-card"><p class="card-title">📈 Visualisasi Anomali</p>', unsafe_allow_html=True)
-            if 'date' in adf.columns:
+            if 'date' in adf_view.columns:
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(x=normal['date'], y=normal['revenue'], mode='markers', name='Normal', marker=dict(color='#0ea5e9', size=4, opacity=0.5)))
-                fig.add_trace(go.Scatter(x=anoms['date'], y=anoms['revenue'], mode='markers', name='🚨 Anomali', marker=dict(color='#ef4444', size=9, symbol='x')))
+                fig.add_trace(go.Scatter(
+                    x=normal['date'], y=normal['revenue'],
+                    mode='markers', name='Normal',
+                    marker=dict(color='#0ea5e9', size=4, opacity=0.5)))
+                fig.add_trace(go.Scatter(
+                    x=anoms['date'], y=anoms['revenue'],
+                    mode='markers', name='🚨 Anomali',
+                    marker=dict(color='#ef4444', size=9, symbol='x')))
                 ct(fig); st.plotly_chart(fig, width='stretch')
             st.markdown('</div>', unsafe_allow_html=True)
+
+            # ── Tabel anomali ──
             if not anoms.empty:
                 st.markdown('<div class="glass-card"><p class="card-title">📋 Daftar Anomali</p>', unsafe_allow_html=True)
                 cols = [c for c in ['date','product','revenue','quantity','anomaly_score'] if c in anoms.columns]
                 st.dataframe(anoms[cols].sort_values('anomaly_score', ascending=False), height=260)
                 st.markdown(dl(anoms, 'anomalies.csv', 'Download CSV'), unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.info(f"✅ Tidak ada anomali terdeteksi dalam {disp_label}.")
         else:
             empty("🚨","Belum ada hasil","Klik Deteksi Anomali")
 
