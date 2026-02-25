@@ -410,12 +410,17 @@ def tab_kpi():
     df = get_df()
     if df is None: return empty("📂","Belum ada data","Upload file atau load sample data")
 
-    # BUG FIX: revenue sudah di-zero untuk non-sukses oleh preprocessing
-    rev = df['revenue'].sum() if 'revenue' in df.columns else 0
-    qty = df['quantity'].sum() if 'quantity' in df.columns else 0
+    # Hitung revenue hanya dari transaksi sukses (untuk KPI utama)
     txn = len(df)
-    # AOV harus berdasarkan transaksi sukses saja
     txn_ok = int(df['is_successful_transaction'].sum()) if 'is_successful_transaction' in df.columns else txn
+    if 'revenue' in df.columns:
+        if 'is_successful_transaction' in df.columns:
+            rev = df.loc[df['is_successful_transaction'], 'revenue'].sum()
+        else:
+            rev = df['revenue'].sum()
+    else:
+        rev = 0
+    qty = df['quantity'].sum() if 'quantity' in df.columns else 0
     aov = rev / txn_ok if txn_ok else 0
 
     cost_col = 'cost' if 'cost' in df.columns else ('hpp' if 'hpp' in df.columns else None)
