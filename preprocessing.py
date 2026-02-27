@@ -685,7 +685,7 @@ class DataPreprocessor:
             df['quarter'] = df['date'].dt.quarter
             df['day_of_week'] = df['date'].dt.dayofweek
             df['day_of_month'] = df['date'].dt.day
-            df['week_of_year'] = df['date'].dt.isocalendar().week.astype(int)  # BUG FIX: cast UInt32 → int
+            df['week_of_year'] = df['date'].dt.isocalendar().week.fillna(0).astype(int)  # BUG FIX: fillna dulu sebelum cast UInt32 → int
             df['is_weekend'] = df['day_of_week'].isin([5, 6]).astype(int)
             df['month_name'] = df['date'].dt.month_name()
             df['year_month'] = df['date'].dt.to_period('M').astype(str)
@@ -762,6 +762,14 @@ class DataPreprocessor:
 
         # 5b. Filter revenue berdasarkan status — non-sukses di-zero, bukan di-drop
         df = self.apply_status_revenue_filter(df)
+
+        # 5c. Drop baris dengan tanggal kosong/NaT agar feature engineering tidak error
+        if 'date' in df.columns:
+            n_before = len(df)
+            df = df.dropna(subset=['date'])
+            n_dropped = n_before - len(df)
+            if n_dropped > 0:
+                logger.warning(f"{n_dropped} baris dibuang karena kolom 'date' kosong/tidak valid (format tidak dikenali)")
 
         # 6. Feature engineering
         df = self.feature_engineering(df)
